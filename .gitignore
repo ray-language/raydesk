@@ -1,0 +1,12 @@
+# raylang build artifacts
+/target/
+/dist/
+*.app/
+.ray-deps/
+
+# Native build output (binary named after the entry file's stem)
+/raydesk
+/main
+
+# Local runtime state
+*.kv

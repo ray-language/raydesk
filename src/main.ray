@@ -1,0 +1,454 @@
+// RayDesk — a small desktop task manager written in raylang.
+//
+// Architecture: a native window (std/ui, system webview) loads a tiny HTTP
+// server (std/net) bound to 127.0.0.1. The frontend (assets/, served via
+// std/embed) talks to the backend over a JSON API. State is persisted as JSON
+// on disk (std/fs). This single file is intentionally self-contained so the
+// whole program can be type-checked and unit-tested through the ray MCP.
+
+import std/ui;
+import std/net;
+import std/fs;
+import std/json;
+import std/uuid;
+import std/time;
+import std/embed;
+
+const APP_TITLE: string = "RayDesk";
+const WIN_W: int = 920;
+const WIN_H: int = 660;
+
+// --------------------------------------------------------------------------
+// Domain model
+// --------------------------------------------------------------------------
+
+struct Todo {
+    id: string,
+    title: string,
+    done: bool,
+    created_ms: int,
+}
+
+struct Request {
+    method: string,
+    path: string,
+    body: string,
+}
+
+// --------------------------------------------------------------------------
+// JSON serialization
+// --------------------------------------------------------------------------
+
+fn todo_to_json(t: Todo) -> json.Json {
+    var m: Map<string, json.Json> = Map.new();
+    m.insert("id", json.Json.JStr(t.id));
+    m.insert("title", json.Json.JStr(t.title));
+    m.insert("done", json.Json.JBool(t.done));
+    m.insert("created_ms", json.Json.JNum(t.created_ms as float));
+    json.Json.JObject(m)
+}
+
+fn todos_to_json(todos: [Todo]) -> string {
+    let items = todos.map(fn(t: Todo) -> json.Json { todo_to_json(t) });
+    json.stringify(json.Json.JArray(items))
+}
+
+fn jstr(j: json.Json, key: string) -> string {
+    match (j) {
+        json.Json.JObject(m) => match (get(m, key)) {
+            Option.Some(v) => match (v) {
+                json.Json.JStr(s) => s,
+                _ => "",
+            },
+            Option.None => "",
+        },
+        _ => "",
+    }
+}
+
+fn jbool(j: json.Json, key: string) -> bool {
+    match (j) {
+        json.Json.JObject(m) => match (get(m, key)) {
+            Option.Some(v) => match (v) {
+                json.Json.JBool(b) => b,
+                _ => false,
+            },
+            Option.None => false,
+        },
+        _ => false,
+    }
+}
+
+fn jnum(j: json.Json, key: string) -> int {
+    match (j) {
+        json.Json.JObject(m) => match (get(m, key)) {
+            Option.Some(v) => match (v) {
+                json.Json.JNum(n) => n as int,
+                _ => 0,
+            },
+            Option.None => 0,
+        },
+        _ => 0,
+    }
+}
+
+fn todos_from_json(source: string) -> [Todo] {
+    var out: [Todo] = [];
+    match (json.parse(source)) {
+        Result.Ok(v) => match (v) {
+            json.Json.JArray(items) => {
+                for it in items {
+                    out.push(Todo {
+                        id: jstr(it, "id"),
+                        title: jstr(it, "title"),
+                        done: jbool(it, "done"),
+                        created_ms: jnum(it, "created_ms"),
+                    });
+                }
+            },
+            _ => {},
+        },
+        Result.Err(_) => {},
+    }
+    out
+}
+
+fn body_field(body: string, key: string) -> string {
+    match (json.parse(body)) {
+        Result.Ok(v) => jstr(v, key),
+        Result.Err(_) => "",
+    }
+}
+
+// --------------------------------------------------------------------------
+// Persistence
+// --------------------------------------------------------------------------
+
+fn storage_path() -> string {
+    match (env("HOME")) {
+        Option.Some(h) => "${h}/.raydesk-tasks.json",
+        Option.None => "raydesk-tasks.json",
+    }
+}
+
+fn load_todos() -> [Todo] {
+    let p = storage_path();
+    if (fs.exists(p)) {
+        match (fs.read_file(p)) {
+            Result.Ok(s) => todos_from_json(s),
+            Result.Err(_) => [],
+        }
+    } else {
+        []
+    }
+}
+
+fn save_todos(todos: [Todo]) -> Result<int, string> {
+    fs.write_file(storage_path(), todos_to_json(todos))
+}
+
+// --------------------------------------------------------------------------
+// HTTP parsing
+// --------------------------------------------------------------------------
+
+fn body_start(raw: string) -> int {
+    match (raw.index_of("\r\n\r\n")) {
+        Option.Some(i) => i + 4,
+        Option.None => raw.len(),
+    }
+}
+
+fn parse_request(raw: string) -> Option<Request> {
+    let start = body_start(raw);
+    let head = raw.substring(0, if (start >= 4) { start - 4 } else { raw.len() });
+    let body = raw.substring(start, raw.len());
+    let lines = head.split("\r\n");
+    if (lines.len() == 0) { return Option.None; }
+    let parts = lines[0].split(" ");
+    if (parts.len() < 2) { return Option.None; }
+    Option.Some(Request { method: parts[0], path: parts[1], body: body })
+}
+
+fn content_length(raw: string) -> int {
+    let start = body_start(raw);
+    let head = raw.substring(0, if (start >= 4) { start - 4 } else { raw.len() });
+    for line in head.to_lower().split("\r\n") {
+        if (line.starts_with("content-length:")) {
+            let after = line.substring(15, line.len()).trim();
+            match (parse_int(after)) {
+                Option.Some(n) => { return n; },
+                Option.None => { return 0; },
+            }
+        }
+    }
+    0
+}
+
+fn content_type(path: string) -> string {
+    if (path.ends_with(".html")) { "text/html; charset=utf-8" }
+    else if (path.ends_with(".css")) { "text/css; charset=utf-8" }
+    else if (path.ends_with(".js")) { "application/javascript; charset=utf-8" }
+    else if (path.ends_with(".json")) { "application/json; charset=utf-8" }
+    else if (path.ends_with(".png")) { "image/png" }
+    else if (path.ends_with(".svg")) { "image/svg+xml" }
+    else { "application/octet-stream" }
+}
+
+// --------------------------------------------------------------------------
+// API handlers (operate on the in-memory list; the server fiber owns it)
+// --------------------------------------------------------------------------
+
+fn handle_api(req: Request, todos: [Todo]) -> (string, [Todo]) {
+    if (req.path == "/api/tasks" && req.method == "GET") {
+        (todos_to_json(todos), todos)
+    } else if (req.path == "/api/tasks" && req.method == "POST") {
+        let title = body_field(req.body, "title").trim();
+        if (title.len() > 0) {
+            todos.push(Todo {
+                id: uuid.uuid_v7(),
+                title: title,
+                done: false,
+                created_ms: time.now(),
+            });
+        }
+        let payload = todos_to_json(todos);
+        (payload, todos)
+    } else if (req.path == "/api/toggle" && req.method == "POST") {
+        let id = body_field(req.body, "id");
+        var i = 0;
+        while (i < todos.len()) {
+            if (todos[i].id == id) { todos[i].done = !todos[i].done; }
+            i = i + 1;
+        }
+        let payload = todos_to_json(todos);
+        (payload, todos)
+    } else if (req.path == "/api/delete" && req.method == "POST") {
+        let id = body_field(req.body, "id");
+        let kept = todos.filter(fn(t: Todo) -> bool { t.id != id });
+        (todos_to_json(kept), kept)
+    } else if (req.path == "/api/clear-done" && req.method == "POST") {
+        let kept = todos.filter(fn(t: Todo) -> bool { !t.done });
+        (todos_to_json(kept), kept)
+    } else {
+        ("[]", todos)
+    }
+}
+
+// --------------------------------------------------------------------------
+// HTTP responses
+// --------------------------------------------------------------------------
+
+fn status_text(code: int) -> string {
+    if (code == 200) { "OK" }
+    else if (code == 400) { "Bad Request" }
+    else if (code == 403) { "Forbidden" }
+    else if (code == 404) { "Not Found" }
+    else { "Error" }
+}
+
+fn write_response(conn: int, code: int, ctype: string, body: bytes) -> Result<int, string> {
+    let head = "HTTP/1.1 ${code} ${status_text(code)}\r\n"
+        + "Content-Type: ${ctype}\r\n"
+        + "Content-Length: ${body.len()}\r\n"
+        + "Cache-Control: no-store\r\n"
+        + "Connection: close\r\n\r\n";
+    let _h = net.socket_write(conn, head)?;
+    net.socket_write_bytes(conn, body)
+}
+
+fn write_json(conn: int, body: string) -> Result<int, string> {
+    write_response(conn, 200, "application/json; charset=utf-8", body.to_bytes())
+}
+
+fn serve_static(conn: int, path: string) -> Result<int, string> {
+    let rel = if (path == "/") { "assets/index.html" } else { "assets${path}" };
+    if (rel.contains("..")) {
+        return write_response(conn, 403, "text/plain", "forbidden".to_bytes());
+    }
+    match (embed.read(rel)) {
+        Result.Ok(data) => write_response(conn, 200, content_type(path), data),
+        Result.Err(_) => write_response(conn, 404, "text/plain", "not found".to_bytes()),
+    }
+}
+
+// --------------------------------------------------------------------------
+// Connection + accept loop
+// --------------------------------------------------------------------------
+
+// Reads a full HTTP request, continuing until the declared body has arrived.
+fn read_full(conn: int) -> Result<string, string> {
+    var raw = net.socket_read(conn)?;
+    var want = content_length(raw);
+    var have = raw.substring(body_start(raw), raw.len()).to_bytes().len();
+    while (have < want) {
+        let more = net.socket_read(conn)?;
+        if (more.len() == 0) { return Result.Ok(raw); }
+        raw = raw + more;
+        want = content_length(raw);
+        have = raw.substring(body_start(raw), raw.len()).to_bytes().len();
+    }
+    Result.Ok(raw)
+}
+
+fn serve_conn(conn: int, todos: [Todo]) -> Result<[Todo], string> {
+    let raw = read_full(conn)?;
+    match (parse_request(raw)) {
+        Option.Some(req) => {
+            if (req.path.starts_with("/api/")) {
+                let (body, next) = handle_api(req, todos);
+                let _w = write_json(conn, body)?;
+                if (req.method == "POST") { let _s = save_todos(next); }
+                Result.Ok(next)
+            } else {
+                let _w = serve_static(conn, req.path)?;
+                Result.Ok(todos)
+            }
+        },
+        Option.None => {
+            let _w = write_response(conn, 400, "text/plain", "bad request".to_bytes())?;
+            Result.Ok(todos)
+        },
+    }
+}
+
+fn serve_loop(listener: int) -> unit {
+    var todos = load_todos();
+    while (true) {
+        match (net.tcp_accept(listener)) {
+            Result.Ok(conn) => {
+                match (serve_conn(conn, todos)) {
+                    Result.Ok(next) => { todos = next; },
+                    Result.Err(_) => {},
+                }
+                close(conn);
+            },
+            Result.Err(_) => {},
+        }
+    }
+}
+
+// --------------------------------------------------------------------------
+// Entry point
+// --------------------------------------------------------------------------
+
+fn main() -> int {
+    let listener = match (net.tcp_listen("127.0.0.1", 0)) {
+        Result.Ok(l) => l,
+        Result.Err(e) => {
+            eprint("RayDesk: cannot bind local server: ${e}");
+            return 1;
+        }
+    };
+    let port = net.local_port(listener);
+    let url = "http://127.0.0.1:${port}/";
+
+    let _server = spawn(fn() { serve_loop(listener); });
+
+    match (ui.open(APP_TITLE, url, WIN_W, WIN_H)) {
+        Result.Ok(_win) => {},
+        Result.Err(e) => {
+            eprint("RayDesk: cannot open window: ${e}");
+            return 1;
+        }
+    }
+
+    while (true) {
+        match (ui.next_event()) {
+            Result.Ok(ev) => {
+                if (ev.kind == "closed") { exit(0); }
+            },
+            Result.Err(e) => {
+                eprint("RayDesk: ui event error: ${e}");
+                exit(1);
+            }
+        }
+    }
+    0
+}
+
+// --------------------------------------------------------------------------
+// Tests (run with: ray test)
+// --------------------------------------------------------------------------
+
+@test
+fn roundtrip_todos() {
+    let todos = [
+        Todo { id: "a1", title: "Comprar pan", done: false, created_ms: 1000 },
+        Todo { id: "b2", title: "Escribir código", done: true, created_ms: 2000 },
+    ];
+    let decoded = todos_from_json(todos_to_json(todos));
+    assert_eq(decoded.len(), 2);
+    assert_eq(decoded[0].title, "Comprar pan");
+    assert_eq(decoded[1].done, true);
+    assert_eq(decoded[1].created_ms, 2000);
+}
+
+@test
+fn parse_get() {
+    match (parse_request("GET /api/tasks HTTP/1.1\r\nHost: x\r\n\r\n")) {
+        Option.Some(r) => {
+            assert_eq(r.method, "GET");
+            assert_eq(r.path, "/api/tasks");
+            assert_eq(r.body, "");
+        },
+        Option.None => panic("should parse"),
+    }
+}
+
+@test
+fn parse_post_body() {
+    let raw = "POST /api/tasks HTTP/1.1\r\nContent-Length: 16\r\n\r\n{\"title\":\"hola\"}";
+    assert_eq(content_length(raw), 16);
+    match (parse_request(raw)) {
+        Option.Some(r) => {
+            assert_eq(r.method, "POST");
+            assert_eq(r.body, "{\"title\":\"hola\"}");
+            assert_eq(body_field(r.body, "title"), "hola");
+        },
+        Option.None => panic("should parse"),
+    }
+}
+
+@test
+fn api_add_and_toggle() {
+    var todos: [Todo] = [];
+    let (_a, after_add) = handle_api(
+        Request { method: "POST", path: "/api/tasks", body: "{\"title\":\"tarea\"}" },
+        todos
+    );
+    assert_eq(after_add.len(), 1);
+    assert_eq(after_add[0].done, false);
+    let id = after_add[0].id;
+    let (_b, after_toggle) = handle_api(
+        Request { method: "POST", path: "/api/toggle", body: "{\"id\":\"${id}\"}" },
+        after_add
+    );
+    assert_eq(after_toggle[0].done, true);
+}
+
+@test
+fn api_delete_and_clear() {
+    var todos = [
+        Todo { id: "x", title: "a", done: true, created_ms: 1 },
+        Todo { id: "y", title: "b", done: false, created_ms: 2 },
+    ];
+    let (_d, after_delete) = handle_api(
+        Request { method: "POST", path: "/api/delete", body: "{\"id\":\"x\"}" },
+        todos
+    );
+    assert_eq(after_delete.len(), 1);
+    assert_eq(after_delete[0].id, "y");
+    let (_c, after_clear) = handle_api(
+        Request { method: "POST", path: "/api/clear-done", body: "" },
+        todos
+    );
+    assert_eq(after_clear.len(), 1);
+    assert_eq(after_clear[0].id, "y");
+}
+
+@test
+fn content_types_map() {
+    assert_eq(content_type("/index.html"), "text/html; charset=utf-8");
+    assert_eq(content_type("/app.js"), "application/javascript; charset=utf-8");
+    assert_eq(content_type("/app.css"), "text/css; charset=utf-8");
+}

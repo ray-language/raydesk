@@ -57,11 +57,11 @@ function render(tasks) {
 }
 
 async function refresh() {
-    render(await api("/api/tasks"));
+    render(await api("/api/list", "POST", {}));
 }
 
 async function add(title) {
-    render(await api("/api/tasks", "POST", { title }));
+    render(await api("/api/add", "POST", { title }));
 }
 
 async function toggle(id) {

@@ -1,32 +1,27 @@
 // RayDesk — a small desktop task manager written in raylang.
 //
 // A native window (std/ui, system webview) loads a local HTTP backend built on
-// the `web` framework (Express-style routing over net/webserver, the
-// recommended base for std/ui app backends). The frontend (assets/) is served
-// from the embedded bundle (std/embed) so a bundled .app runs from any cwd.
-// Request handlers are stateless — the JSON file in `store` is the source of
-// truth — which keeps shared mutable state out of the per-connection fibers.
+// the `web` framework (Express-style routing over net/webserver, the recommended
+// base for std/ui app backends). The frontend (assets/) is served straight from
+// the embedded bundle with `web.static_embedded` (live disk in dev, baked into
+// the native binary / .app). Request handlers are stateless — the JSON file in
+// `store` is the source of truth — which keeps shared mutable state out of the
+// per-connection fibers.
+//
+// Note on verbs: the web framework serves GET/HEAD from the static mount FIRST
+// (so a "/" mount can't be shadowed by a route), and lets POST under the mount
+// reach routing. RayDesk therefore mounts the assets at "/" and exposes the API
+// as POST endpoints — including the read (`/api/list`).
 
 import web/framework as web;
 import std/ui;
 import std/net;
-import std/embed;
 import model;
 import store;
 
 const APP_TITLE: string = "RayDesk";
 const WIN_W: int = 920;
 const WIN_H: int = 660;
-
-fn content_type(path: string) -> string {
-    if (path.ends_with(".html")) { "text/html; charset=utf-8" }
-    else if (path.ends_with(".css")) { "text/css; charset=utf-8" }
-    else if (path.ends_with(".js")) { "application/javascript; charset=utf-8" }
-    else if (path.ends_with(".json")) { "application/json; charset=utf-8" }
-    else if (path.ends_with(".svg")) { "image/svg+xml" }
-    else if (path.ends_with(".png")) { "image/png" }
-    else { "application/octet-stream" }
-}
 
 // --- API handlers (stateless: load -> mutate -> save -> respond) ---
 
@@ -62,65 +57,33 @@ fn api_clear(c: web.Ctx, r: web.Res) -> unit {
     web.json(r, model.todos_to_json(todos));
 }
 
-// --- Static assets from the embedded bundle (catch-all GET) ---
-//
-// TODO(web>0.1.0): replace this handler + `content_type` + the "/*rest" route
-// with `web.static_embedded(app, "/", "assets")` (M147) once the published
-// package exports it — it serves the same [native] embed namespace directly.
-
-fn serve_asset(c: web.Ctx, r: web.Res) -> unit {
-    let rest = web.param(c, "rest");
-    let rel = if (rest == "") { "assets/index.html" } else { "assets/${rest}" };
-    if (rel.contains("..")) {
-        let _x = web.status(r, 403);
-        web.text(r, "forbidden");
-        return;
-    }
-    match (embed.read(rel)) {
-        Result.Ok(data) => {
-            r.body = data;
-            r.content_type = content_type(rel);
-        },
-        Result.Err(_) => {
-            let _x = web.status(r, 404);
-            web.text(r, "not found");
-        },
-    }
-}
-
 fn build() -> web.App {
     let app = web.new_app();
-    web.GET(app, "/api/tasks", api_list);
-    web.POST(app, "/api/tasks", api_add);
+    web.POST(app, "/api/list", api_list);
+    web.POST(app, "/api/add", api_add);
     web.POST(app, "/api/toggle", api_toggle);
     web.POST(app, "/api/delete", api_delete);
     web.POST(app, "/api/clear-done", api_clear);
-    web.GET(app, "/*rest", serve_asset);
+    // Serves index.html at "/", plus /app.css and /app.js, from the [native]
+    // embed bundle. Path traversal ("..") is rejected by the framework.
+    web.static_embedded(app, "/", "assets");
     app
 }
 
-// Ask the OS for a free ephemeral port, then hand it to the web server. The
-// tiny gap between close and re-bind is harmless for a local single-user app.
-//
-// TODO(web>0.1.0): switch to the race-free split `web.listen_on(build, listener)`
-// (M150): `let l = net.tcp_listen("127.0.0.1", 0)?; let port = net.local_port(l);`
-// then spawn `web.listen_on(build, l)` — no close/re-bind. Pending package publish.
-fn free_port() -> int {
-    match (net.tcp_listen("127.0.0.1", 0)) {
-        Result.Ok(l) => {
-            let p = net.local_port(l);
-            close(l);
-            p
-        },
-        Result.Err(_) => 8737,
-    }
-}
-
 fn main() -> int {
-    let port = free_port();
+    // Bind first, learn the port, then serve on the same listener — no
+    // close/re-bind race (web.listen_on, M150). The window opens on that port.
+    let listener = match (net.tcp_listen("127.0.0.1", 0)) {
+        Result.Ok(l) => l,
+        Result.Err(e) => {
+            eprint("RayDesk: cannot bind local server: ${e}");
+            return 1;
+        }
+    };
+    let port = net.local_port(listener);
     let url = "http://127.0.0.1:${port}/";
 
-    let _server = spawn(fn() { let _r = web.listen(build, "127.0.0.1", port); });
+    let _server = spawn(fn() { let _r = web.listen_on(build, listener); });
 
     match (ui.open(APP_TITLE, url, WIN_W, WIN_H)) {
         Result.Ok(_win) => {},

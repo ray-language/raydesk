@@ -43,26 +43,22 @@ raylang) hay que fabricarlo con un servidor HTTP local (ahora con `web`). Un
 canal de mensajes bidireccional tipado (`ui.on_message()` + `window.raydesk.send`
 en el webview) evitaría el servidor para la mayoría de apps.
 
-### 🟡 RESUELTO UPSTREAM (pendiente de publicar) — 2. Puerto libre para `web.listen`
+### ✅ RESUELTO Y ADOPTADO (web 0.2.0) — 2. Puerto libre para `web.listen`
 
-El problema (carrera close/re-bind al descubrir el puerto) ya tiene solución en
-el lenguaje: **`web.listen_on(build, listener)`** (M150), el split bind/serve —
-`net.tcp_listen(host, 0)` + `net.local_port` primero (el programa CONOCE su
-puerto sin carrera; el backlog acepta desde el bind). Está en la `reference.md`
-§11, **pero aún no en el paquete publicado `web` 0.1.0** (`web.listen_on` da
-`module 'web/framework' does not export 'listen_on'`). RayDesk seguirá con
-`free_port()` (bind 0 → `local_port` → `close`) hasta que se publique; la carrera
-es inocua en localhost mono-usuario. **Acción al publicarse:** cambiar a
-`web.listen_on(build, listener)` (ver comentario en `src/main.ray`).
+**`web.listen_on(build, listener)`** (M150) da el split bind/serve. RayDesk
+bindea con `net.tcp_listen("127.0.0.1", 0)`, lee el puerto con `net.local_port`
+(lo conoce sin carrera; el backlog acepta desde el bind) y sirve en ese mismo
+listener. Se eliminó `free_port()` y su micro-carrera close/re-bind.
 
-### 🟡 RESUELTO UPSTREAM (pendiente de publicar) — 3. `web.static_embedded`
+### ✅ RESUELTO Y ADOPTADO (web 0.2.0) — 3. `web.static_embedded`
 
-Ya existe en el lenguaje: **`static_embedded(app, prefix, dir)`** (M147) sirve del
-espacio `[native] embed` (disco en vivo en dev, horneado en nativo). Está en la
-`reference.md` §11, **pero aún no en el paquete publicado `web` 0.1.0**. Por eso
-RayDesk sigue sirviendo los assets con una ruta catch-all `"/*rest"` + `std/embed`
-(equivalente, ~15 líneas). **Acción al publicarse:** reemplazar `serve_asset` +
-`content_type` por `web.static_embedded(app, "/", "assets")`.
+**`static_embedded(app, prefix, dir)`** (M147) sirve del espacio `[native] embed`
+(disco en vivo en dev, horneado en nativo). RayDesk monta `static_embedded(app,
+"/", "assets")` y con ello ganó **ETag + 304 + Range** y bloqueo de path-traversal
+"de fábrica"; se borraron `serve_asset`, `content_type` y el import de `std/embed`
+(~40 líneas menos). Detalle del framework: los mounts sirven GET/HEAD **antes** que
+las rutas, así que la API se expone como **POST** (incluida la lectura
+`/api/list`) — el modelo explícito "GET = assets, POST = rutas".
 
 ### 4. Ergonomía: tupla/paréntesis como expresión final de un bloque
 

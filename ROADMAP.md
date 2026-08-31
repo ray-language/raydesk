@@ -120,6 +120,34 @@ request es barato. Para más carga se usaría la forma **actor** de `std/kv`
 cada request. **Deseable:** un helper de estado por-app en `web` (p. ej. envolver
 ese actor) para no cablearlo en cada proyecto.
 
+### 9. `ray bundle --ios` borra la config de firma en cada regeneración
+
+Cada `ray bundle --ios` **regenera `project.pbxproj`**, y con él desaparece el
+`DEVELOPMENT_TEAM` que Xcode escribe ahí al elegir el equipo en *Signing & Teams*
+— hay que volver a ponerlo tras cada bundle.
+
+Workaround adoptado en RayDesk: fijar la firma en **`App.xcconfig`** (el
+`baseConfigurationReference` de todas las configs, y el archivo "ajusta aquí" que
+el bundle no pisa), no en la UI de Xcode:
+
+```
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = <TU_TEAM_ID>
+```
+
+Al regenerar el pbxproj sin `DEVELOPMENT_TEAM`, el valor del xcconfig aplica y la
+firma sobrevive.
+
+**Deseable (mejora en raylang):**
+- que `ray bundle --ios` **preserve** un `DEVELOPMENT_TEAM`/config de firma ya
+  presente al regenerar el pbxproj (no clobber), y/o
+- un `[ios] development_team = "…"` en `ray.toml` (o un flag `--team`) que el bundle
+  escriba en el `App.xcconfig` generado, para no editarlo a mano.
+
+(Riesgo del workaround: solo aguanta si el bundle **no reescribe** `App.xcconfig`;
+en RayDesk el xcconfig no ha cambiado pese a varios `ray bundle`, lo que sugiere
+que se preserva — conviene confirmarlo tras el próximo bundle.)
+
 ---
 
 ## Cosas que SÍ estaban y funcionaron muy bien

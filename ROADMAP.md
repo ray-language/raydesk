@@ -144,6 +144,29 @@ lugar de llamar a `ray bundle --ios` directamente (team configurable con
 - que NO reescriba `App.xcconfig` cuando ya existe (respetar el "ajusta aquí" que su
   propia cabecera promete).
 
+### 10. `std/ui`: no se puede integrar en el menú de app de macOS (el "About")
+
+En macOS el menú de app (el primero, en negrita) lo instala el runtime de raylang
+y solo trae **Hide/Quit**. `std/ui.menu(title, items)` añade menús top-level
+**aparte** (aparecen tras "Edit"), y no hay API para tocar el menú de app. Por eso
+el clásico **"About RayDesk"** no se puede poner donde lo pone toda app nativa
+(p. ej. Ghostty: *About Ghostty*, *Settings…*, *Services*, *Hide*, *Quit* en el
+menú de app). El workaround actual es un item "Acerca de RayDesk" en un menú custom
+("Archivo") que abre un modal en la webview — funciona, pero no es la ubicación
+nativa.
+
+(El nombre del menú de app sale como "ray" al lanzar con `ray run`; en el `.app`
+de `ray bundle --name RayDesk` sale "RayDesk" — eso sí es correcto.)
+
+**Deseable (mejora en raylang):** que `std/ui` deje al programa poblar el menú de
+app. En orden de preferencia:
+- `ui.set_about(...)` (o un `MenuItem` con `role: "about"`) que instale el
+  "About <app>" nativo — el 90% de los casos; y/o
+- `ui.app_menu([MenuItem])` para añadir items al menú de app (About, Settings…,
+  Check for Updates…), emitiendo los mismos eventos `"menu"` con `tag`; y/o
+- que el menú de app tome su título del nombre de la app también bajo `ray run`
+  (hoy solo el `.app` lo hace).
+
 ---
 
 ## Cosas que SÍ estaban y funcionaron muy bien

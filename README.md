@@ -2,8 +2,8 @@
 
 Un gestor de tareas de **escritorio** escrito en [raylang](https://raylang.dev)
 (probado con **1.4.0**). Ventana nativa (webview del sistema) + backend HTTP
-local sobre el framework `web` + persistencia en disco. Pensado como banco de
-pruebas de las características del lenguaje.
+local sobre el framework `web` + persistencia con `std/kv`. Pensado como banco
+de pruebas de las características del lenguaje.
 
 ## Arquitectura
 
@@ -17,8 +17,8 @@ pruebas de las características del lenguaje.
 │  fetch() ◀───── JSON ────│   POST /api/clear-done           │  GET / , /app.* →     │
 └─────────────────────────┘   GET  / , /app.*  (assets)      │  web.static_embedded  │
                                                               └──────────┬────────────┘
-                                          std/fs + std/json (model)      ▼
-                                              ~/Documents/RayDesk/tasks.json
+                                        std/kv (store, 1 clave/tarea)     ▼
+                                               ~/Documents/RayDesk/tasks.kv
 ```
 
 - **UI**: `std/ui.open()` abre una ventana nativa que carga el servidor local;
@@ -31,16 +31,21 @@ pruebas de las características del lenguaje.
   hornea en el binario (una `.app` arranca con `cwd=/`).
 - **Verbos**: los mounts de estáticos sirven GET/HEAD antes que las rutas, así que
   la API va como **POST** (incluida la lectura `/api/list`).
-- **Handlers stateless**: el archivo JSON es la única fuente de verdad
-  (load → mutar → save por request). Así no hay estado mutable compartido entre
-  las fibras de conexión del framework.
+- **Persistencia**: `std/kv` con **una clave por tarea** (la clave es el `id`, un
+  `uuid_v7` ordenable por tiempo, así `keys()` viene en orden de creación) y
+  **guardado atómico** (temp + rename). Es la única fuente de verdad; los handlers
+  son stateless (abren el store, operan, guardan por request), así que no hay estado
+  mutable compartido entre las fibras de conexión. Se guarda en
+  `~/Documents/RayDesk/tasks.kv` (en iOS la raíz del contenedor no es escribible;
+  `Documents/` sí y persiste). `std/fs` se usa solo para crear ese directorio
+  (`fs.mkdir`, mkdir -p).
 
 ## Módulos
 
 ```
 src/
-├── model.ray   # Todo + JSON + operaciones puras (add/toggle/remove/clear) + @test
-├── store.ray   # persistencia en disco (std/fs)
+├── model.ray   # Todo + JSON (una tarea <-> objeto; lista para la API) + @test
+├── store.ray   # repositorio sobre std/kv (list/add/toggle/remove/clear_done)
 └── main.ray    # app web (rutas + static_embedded), ventana std/ui + event loop
 ```
 
@@ -50,7 +55,7 @@ src/
 ray add web@^0.2.0      # (ya en ray.toml) descarga web + net del registro
 ray run                 # abre la ventana (dev: assets en vivo desde disco)
 ray dev                 # igual, con recarga al guardar cambios
-ray test                # corre los @test del proyecto (3 tests en model)
+ray test                # corre los @test del proyecto (4 tests en model)
 ray build --native --release
 ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .desktop
 ```
@@ -58,15 +63,18 @@ ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .deskt
 > Verificado con el MCP de raylang usando el parámetro `path` (contexto de
 > proyecto: resuelve módulos y dependencias). El servidor se probó headless con
 > `curl`: `GET /` (text/html + ETag), `GET /app.js` (text/javascript + ETag),
-> `POST /api/list|add|...` con persistencia y UTF-8, y `..` → 404.
-> La ventana real se abre en tu máquina con `ray run`.
+> `POST /api/list|add|toggle|clear-done` y — reiniciando el servidor entre medias —
+> se confirmó que las tareas **persisten** en el store `kv` (altas, toggle y
+> clear-done sobreviven), con UTF-8, y `..` → 404. La ventana real se abre en tu
+> máquina con `ray run`.
 
 ## Características de raylang ejercitadas
 
 paquete `web` 0.2.0 (Tier-2: `listen_on`, `static_embedded`) · `std/ui` ·
-`std/net` · `std/fs` · `std/json` · `std/uuid` (`uuid_v7`) · `std/time` ·
-módulos + `pub` · concurrencia (`spawn`) · `struct`/`enum` · pattern matching ·
-`Result`/`Option` + `?` · closures (`map`/`filter`) · `@test`.
+`std/net` · `std/kv` (store con guardado atómico) · `std/fs` (`mkdir`) ·
+`std/json` · `std/uuid` (`uuid_v7`) · `std/time` · módulos + `pub` ·
+concurrencia (`spawn`) · `struct`/`enum` (uso cross-módulo) · pattern matching ·
+`Result`/`Option` + `?` · closures (`map`) · `@test`.
 
 ## Notas de desarrollo
 

@@ -113,11 +113,12 @@ Queda un desajuste **inverso** menor: la referencia §11 documenta `listen_on` y
 
 Con `web`, cada conexión corre en su fibra y las fibras tienen heaps aislados, así
 que no se puede compartir un `var todos` capturado entre handlers. RayDesk lo
-resuelve siendo **stateless** (carga/guarda el archivo por request; la app es
-mono-usuario y los datos son pequeños). Para algo con más carga haría falta el
-patrón actor (un dueño de estado + canales) o `std/kv` en su forma `share`.
-**Deseable:** un helper de estado por-app en `web` (p. ej. un actor de sesión de
-aplicación) para no reimplementarlo en cada proyecto.
+resuelve siendo **stateless**: cada request abre el store `std/kv`, opera y guarda
+(guardado atómico). La app es mono-usuario y los datos pequeños, así que abrir por
+request es barato. Para más carga se usaría la forma **actor** de `std/kv`
+(`open_shared`/`share`, un dueño de estado + canales) y así no releer el archivo en
+cada request. **Deseable:** un helper de estado por-app en `web` (p. ej. envolver
+ese actor) para no cablearlo en cada proyecto.
 
 ---
 

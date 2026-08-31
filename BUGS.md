@@ -71,8 +71,9 @@ fn main() -> int { match (demo()) { Result.Ok(v) => { print(v); 0 }, Result.Err(
 
 **Qué revisar:** alinear `reference.md` §10 — nombrar los constructores y aclarar
 que las operaciones son **métodos** (`get_string`/`set_string`/`delete`/`save`),
-no funciones libres `get`/`set`. (RayDesk sigue usando `std/fs` + JSON, que es
-adecuado para su caso; pero `std/kv` era una opción válida desde el principio.)
+no funciones libres `get`/`set`. **Ya corregido** (ver el resumen arriba). Y una
+vez aclarado, RayDesk **migró su persistencia a `std/kv`** (una clave por tarea,
+guardado atómico) — que era la opción válida desde el principio.
 
 ---
 

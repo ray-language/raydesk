@@ -1,9 +1,7 @@
-// Domain model: the Todo type, its JSON (de)serialization, and the pure
-// operations over a task list. No I/O here — persistence lives in `store`.
+// Domain model: the Todo type and its JSON (de)serialization. Pure data — no
+// I/O, no persistence (that lives in `store`, backed by std/kv).
 
 import std/json;
-import std/uuid;
-import std/time;
 
 pub struct Todo {
     id: string,
@@ -12,7 +10,7 @@ pub struct Todo {
     created_ms: int,
 }
 
-// --- JSON ---
+// --- JSON: one Todo <-> a JSON object string (the kv value) ---
 
 fn todo_to_json(t: Todo) -> json.Json {
     var m: Map<string, json.Json> = Map.new();
@@ -23,9 +21,8 @@ fn todo_to_json(t: Todo) -> json.Json {
     json.Json.JObject(m)
 }
 
-pub fn todos_to_json(todos: [Todo]) -> string {
-    let items = todos.map(fn(t: Todo) -> json.Json { todo_to_json(t) });
-    json.stringify(json.Json.JArray(items))
+pub fn todo_to_json_str(t: Todo) -> string {
+    json.stringify(todo_to_json(t))
 }
 
 fn jstr(j: json.Json, key: string) -> string {
@@ -67,29 +64,29 @@ fn jnum(j: json.Json, key: string) -> int {
     }
 }
 
-pub fn todos_from_json(source: string) -> [Todo] {
-    var out: [Todo] = [];
-    match (json.parse(source)) {
+pub fn todo_from_json_str(src: string) -> Option<Todo> {
+    match (json.parse(src)) {
         Result.Ok(v) => match (v) {
-            json.Json.JArray(items) => {
-                for it in items {
-                    out.push(Todo {
-                        id: jstr(it, "id"),
-                        title: jstr(it, "title"),
-                        done: jbool(it, "done"),
-                        created_ms: jnum(it, "created_ms"),
-                    });
-                }
-            },
-            _ => {},
+            json.Json.JObject(_m) => Option.Some(Todo {
+                id: jstr(v, "id"),
+                title: jstr(v, "title"),
+                done: jbool(v, "done"),
+                created_ms: jnum(v, "created_ms"),
+            }),
+            _ => Option.None,
         },
-        Result.Err(_) => {},
+        Result.Err(_) => Option.None,
     }
-    out
 }
 
-// Extracts a top-level string field from a JSON object body (used for the API
-// request payloads `{"title": …}` / `{"id": …}`). "" when absent or invalid.
+// The whole list as a JSON array — the API response shape.
+pub fn todos_to_json(todos: [Todo]) -> string {
+    let items = todos.map(fn(t: Todo) -> json.Json { todo_to_json(t) });
+    json.stringify(json.Json.JArray(items))
+}
+
+// Extracts a top-level string field from a JSON object body ({"title": …} /
+// {"id": …}). "" when absent or invalid.
 pub fn field_of(source: string, key: string) -> string {
     match (json.parse(source)) {
         Result.Ok(v) => jstr(v, key),
@@ -97,48 +94,39 @@ pub fn field_of(source: string, key: string) -> string {
     }
 }
 
-// --- Operations (pure over the list; arrays have reference semantics) ---
-
-pub fn add(todos: [Todo], title: string) -> [Todo] {
-    todos.push(Todo {
-        id: uuid.uuid_v7(),
-        title: title,
-        done: false,
-        created_ms: time.now(),
-    });
-    todos
-}
-
-pub fn toggle(todos: [Todo], id: string) -> [Todo] {
-    var i = 0;
-    while (i < todos.len()) {
-        if (todos[i].id == id) { todos[i].done = !todos[i].done; }
-        i = i + 1;
-    }
-    todos
-}
-
-pub fn remove(todos: [Todo], id: string) -> [Todo] {
-    todos.filter(fn(t: Todo) -> bool { t.id != id })
-}
-
-pub fn clear_done(todos: [Todo]) -> [Todo] {
-    todos.filter(fn(t: Todo) -> bool { !t.done })
-}
-
 // --- Tests ---
 
 @test
-fn roundtrip_todos() {
-    let todos = [
-        Todo { id: "a1", title: "Comprar pan", done: false, created_ms: 1000 },
-        Todo { id: "b2", title: "Escribir código", done: true, created_ms: 2000 },
+fn todo_json_roundtrip() {
+    let t = Todo { id: "01x", title: "café ☕", done: true, created_ms: 42 };
+    match (todo_from_json_str(todo_to_json_str(t))) {
+        Option.Some(u) => {
+            assert_eq(u.id, "01x");
+            assert_eq(u.title, "café ☕");
+            assert_eq(u.done, true);
+            assert_eq(u.created_ms, 42);
+        },
+        Option.None => panic("should parse"),
+    }
+}
+
+@test
+fn bad_json_is_none() {
+    match (todo_from_json_str("not json")) {
+        Option.Some(_t) => panic("should be None"),
+        Option.None => {},
+    }
+}
+
+@test
+fn list_json() {
+    let ts = [
+        Todo { id: "a", title: "x", done: false, created_ms: 1 },
+        Todo { id: "b", title: "y", done: true, created_ms: 2 },
     ];
-    let decoded = todos_from_json(todos_to_json(todos));
-    assert_eq(decoded.len(), 2);
-    assert_eq(decoded[0].title, "Comprar pan");
-    assert_eq(decoded[1].done, true);
-    assert_eq(decoded[1].created_ms, 2000);
+    let s = todos_to_json(ts);
+    assert(s.contains("\"id\":\"a\""));
+    assert(s.contains("\"done\":true"));
 }
 
 @test
@@ -146,24 +134,4 @@ fn field_extraction() {
     assert_eq(field_of("{\"title\":\"hola\"}", "title"), "hola");
     assert_eq(field_of("{\"id\":\"x1\"}", "id"), "x1");
     assert_eq(field_of("not json", "title"), "");
-}
-
-@test
-fn ops_add_toggle_remove_clear() {
-    var todos: [Todo] = [];
-    todos = add(todos, "tarea");
-    assert_eq(todos.len(), 1);
-    assert_eq(todos[0].done, false);
-
-    let id = todos[0].id;
-    todos = toggle(todos, id);
-    assert_eq(todos[0].done, true);
-
-    todos = add(todos, "otra");
-    todos = clear_done(todos);
-    assert_eq(todos.len(), 1);
-    assert_eq(todos[0].title, "otra");
-
-    todos = remove(todos, todos[0].id);
-    assert_eq(todos.len(), 0);
 }

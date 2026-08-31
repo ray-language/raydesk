@@ -16,6 +16,7 @@
 import web/framework as web;
 import std/ui;
 import std/net;
+import std/fs;
 import model;
 import store;
 
@@ -62,6 +63,53 @@ fn build() -> web.App {
     app
 }
 
+// --- Menus (std/ui) ---
+//
+// Custom top-level menus. A click emits a "menu" event whose `tag` we act on in
+// the event loop. Actions drive the frontend through `ui.eval_js` (the raylang ->
+// JS bridge), reusing the page's own handlers so the UI stays in sync; "export"
+// uses the native save dialog. The standard App/Edit menus (⌘Q, clipboard, undo)
+// install themselves. On Linux the menu bar is per-window, so register BEFORE
+// opening the window.
+fn install_menus() -> unit {
+    let _f = ui.menu("Archivo", [
+        ui.MenuItem { tag: "new", title: "Nueva tarea", shortcut: "N" },
+        ui.MenuItem { tag: "export", title: "Exportar tareas…", shortcut: "E" },
+        ui.MenuItem { tag: "reload", title: "Recargar", shortcut: "R" },
+    ]);
+    let _t = ui.menu("Tarea", [
+        ui.MenuItem { tag: "clear", title: "Limpiar completadas", shortcut: "K" },
+    ]);
+}
+
+// Writes the current task list as JSON to a user-chosen path (native "save as").
+fn export_tasks() -> unit {
+    match (ui.save_file("raydesk-tareas.json")) {
+        Result.Ok(chosen) => match (chosen) {
+            Option.Some(path) => {
+                match (fs.write_file(path, model.todos_to_json(store.list()))) {
+                    Result.Ok(_n) => {},
+                    Result.Err(e) => eprint("RayDesk: export failed: ${e}"),
+                }
+            },
+            Option.None => {},
+        },
+        Result.Err(e) => eprint("RayDesk: save dialog failed: ${e}"),
+    }
+}
+
+fn on_menu(win: int, tag: string) -> unit {
+    if (tag == "new") {
+        let _e = ui.eval_js(win, "var e=document.getElementById('title'); if(e){e.focus();}");
+    } else if (tag == "reload") {
+        let _e = ui.eval_js(win, "location.reload();");
+    } else if (tag == "clear") {
+        let _e = ui.eval_js(win, "var b=document.getElementById('clear-done'); if(b){b.click();}");
+    } else if (tag == "export") {
+        export_tasks();
+    }
+}
+
 fn main() -> int {
     // Bind first, learn the port, then serve on the same listener — no
     // close/re-bind race (web.listen_on, M150). The window opens on that port.
@@ -77,18 +125,25 @@ fn main() -> int {
 
     let _server = spawn(fn() { let _r = web.listen_on(build, listener); });
 
-    match (ui.open(APP_TITLE, url, WIN_W, WIN_H)) {
-        Result.Ok(_win) => {},
+    // Register menus before opening (Linux applies them to later windows).
+    install_menus();
+
+    let win = match (ui.open(APP_TITLE, url, WIN_W, WIN_H)) {
+        Result.Ok(w) => w,
         Result.Err(e) => {
             eprint("RayDesk: cannot open window: ${e}");
             return 1;
         }
-    }
+    };
 
     while (true) {
         match (ui.next_event()) {
             Result.Ok(ev) => {
-                if (ev.kind == "closed") { exit(0); }
+                if (ev.kind == "closed") {
+                    exit(0);
+                } else if (ev.kind == "menu") {
+                    on_menu(win, ev.tag);
+                }
             },
             Result.Err(e) => {
                 eprint("RayDesk: ui event error: ${e}");

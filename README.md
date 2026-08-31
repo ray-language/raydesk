@@ -31,6 +31,12 @@ de pruebas de las características del lenguaje.
   hornea en el binario (una `.app` arranca con `cwd=/`).
 - **Verbos**: los mounts de estáticos sirven GET/HEAD antes que las rutas, así que
   la API va como **POST** (incluida la lectura `/api/list`).
+- **Menús** (`std/ui`): menús nativos "Archivo" (Nueva tarea ⌘N, Exportar
+  tareas… ⌘E, Recargar ⌘R) y "Tarea" (Limpiar completadas ⌘K). El click llega
+  como evento `"menu"` con `tag`; las acciones manejan el frontend vía
+  `ui.eval_js` (reusan los handlers de la página, así la UI queda sincronizada) y
+  "Exportar" abre el diálogo nativo `ui.save_file`. Los menús estándar App/Edit
+  (⌘Q, portapapeles, undo) se instalan solos.
 - **Persistencia**: `std/kv` con **una clave por tarea** (la clave es el `id`, un
   `uuid_v7` ordenable por tiempo, así `keys()` viene en orden de creación) y
   **guardado atómico** (temp + rename). Es la única fuente de verdad; los handlers
@@ -70,8 +76,9 @@ ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .deskt
 
 ## Características de raylang ejercitadas
 
-paquete `web` 0.2.0 (Tier-2: `listen_on`, `static_embedded`) · `std/ui` ·
-`std/net` · `std/kv` (store con guardado atómico) · `std/fs` (`mkdir`) ·
+paquete `web` 0.2.0 (Tier-2: `listen_on`, `static_embedded`) · `std/ui`
+(ventana, `menu`, `eval_js`, `save_file`, eventos) · `std/net` ·
+`std/kv` (store con guardado atómico) · `std/fs` (`mkdir`, export) ·
 `std/json` · `std/uuid` (`uuid_v7`) · `std/time` · módulos + `pub` ·
 concurrencia (`spawn`) · `struct`/`enum` (uso cross-módulo) · pattern matching ·
 `Result`/`Option` + `?` · closures (`map`) · `@test`.

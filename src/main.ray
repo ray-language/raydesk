@@ -25,6 +25,15 @@ const WIN_H: int = 660;
 
 // --- API handlers (stateless: load -> mutate -> save -> respond) ---
 
+// Persists and surfaces a save failure (silently dropping it is what hid the
+// iOS "tasks don't persist" bug).
+fn persist(todos: [model.Todo]) -> unit {
+    match (store.save(todos)) {
+        Result.Ok(_n) => {},
+        Result.Err(e) => eprint("RayDesk: save failed: ${e}"),
+    }
+}
+
 fn api_list(c: web.Ctx, r: web.Res) -> unit {
     web.json(r, model.todos_to_json(store.load()));
 }
@@ -33,27 +42,27 @@ fn api_add(c: web.Ctx, r: web.Res) -> unit {
     let title = model.field_of(web.body(c), "title").trim();
     var todos = store.load();
     if (title.len() > 0) { todos = model.add(todos, title); }
-    let _s = store.save(todos);
+    persist(todos);
     web.json(r, model.todos_to_json(todos));
 }
 
 fn api_toggle(c: web.Ctx, r: web.Res) -> unit {
     let id = model.field_of(web.body(c), "id");
     let todos = model.toggle(store.load(), id);
-    let _s = store.save(todos);
+    persist(todos);
     web.json(r, model.todos_to_json(todos));
 }
 
 fn api_delete(c: web.Ctx, r: web.Res) -> unit {
     let id = model.field_of(web.body(c), "id");
     let todos = model.remove(store.load(), id);
-    let _s = store.save(todos);
+    persist(todos);
     web.json(r, model.todos_to_json(todos));
 }
 
 fn api_clear(c: web.Ctx, r: web.Res) -> unit {
     let todos = model.clear_done(store.load());
-    let _s = store.save(todos);
+    persist(todos);
     web.json(r, model.todos_to_json(todos));
 }
 

@@ -18,7 +18,7 @@ pruebas de las características del lenguaje.
 └─────────────────────────┘   GET  / , /app.*  (assets)      │  web.static_embedded  │
                                                               └──────────┬────────────┘
                                           std/fs + std/json (model)      ▼
-                                                          ~/.raydesk-tasks.json
+                                              ~/Documents/RayDesk/tasks.json
 ```
 
 - **UI**: `std/ui.open()` abre una ventana nativa que carga el servidor local;

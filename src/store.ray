@@ -1,15 +1,25 @@
-// Persistence: the task list is stored as a JSON file in the user's home.
+// Persistence: the task list is stored as a JSON file under the user's home.
 // Handlers are stateless (the file is the single source of truth), which keeps
 // the web layer free of shared mutable state across connection fibers.
+//
+// Location: `$HOME/Documents/RayDesk/tasks.json`. On iOS the app container root
+// (`$HOME`) is NOT writable — only subdirectories like `Documents/` are — so a
+// dotfile at `$HOME` silently fails to save. `Documents/` is writable and
+// persists across launches on iOS, and exists on macOS/Linux too. The directory
+// is created on demand with `fs.mkdir` (mkdir -p, idempotent).
 
 import std/fs;
 import model;
 
-fn path() -> string {
+fn base_dir() -> string {
     match (env("HOME")) {
-        Option.Some(h) => "${h}/.raydesk-tasks.json",
-        Option.None => "raydesk-tasks.json",
+        Option.Some(h) => "${h}/Documents/RayDesk",
+        Option.None => ".",
     }
+}
+
+fn path() -> string {
+    "${base_dir()}/tasks.json"
 }
 
 pub fn load() -> [model.Todo] {
@@ -25,5 +35,6 @@ pub fn load() -> [model.Todo] {
 }
 
 pub fn save(todos: [model.Todo]) -> Result<int, string> {
+    let _dir = fs.mkdir(base_dir());
     fs.write_file(path(), model.todos_to_json(todos))
 }

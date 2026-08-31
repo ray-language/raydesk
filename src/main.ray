@@ -266,7 +266,7 @@ fn serve_static(conn: int, path: string) -> Result<int, string> {
         return write_response(conn, 403, "text/plain", "forbidden".to_bytes());
     }
     match (embed.read(rel)) {
-        Result.Ok(data) => write_response(conn, 200, content_type(path), data),
+        Result.Ok(data) => write_response(conn, 200, content_type(rel), data),
         Result.Err(_) => write_response(conn, 404, "text/plain", "not found".to_bytes()),
     }
 }

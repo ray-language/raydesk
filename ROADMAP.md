@@ -82,11 +82,17 @@ la tupla cuando el bloque previo es una sentencia, o que `ray fmt` lo separe.
 `web` hubo que **leer su código** en `.ray-deps/web/framework.ray`. **Deseable:**
 `ray_doc "web.listen"` o `ray doc <paquete>` que liste exportaciones y firmas.
 
-### 6. Mejor diagnóstico al chocar con un builtin genérico
+### ✅ RESUELTO — 6. Diagnóstico al chocar con un builtin genérico
 
-`struct Task { … }` → `Task expects 1 type argument, not 0`. El mensaje no dice
-que `Task` es un builtin (`Task<T>`, concurrencia). **Deseable:** *"'Task' es un
-tipo builtin (Task<T>); elige otro nombre"*.
+En 1.4.0 el mensaje al usar `struct Task` como tipo ya es claro (antes: el
+confuso *"Task expects 1 type argument, not 0"*):
+
+```
+type error: 'Task' is a builtin type (Task<T>) and shadows your struct of the
+same name; rename your type
+```
+
+Justo lo que se pedía. (Ver `BUGS.md`.)
 
 ### 7. Huecos en `reference.md`
 

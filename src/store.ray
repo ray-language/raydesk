@@ -1,0 +1,29 @@
+// Persistence: the task list is stored as a JSON file in the user's home.
+// Handlers are stateless (the file is the single source of truth), which keeps
+// the web layer free of shared mutable state across connection fibers.
+
+import std/fs;
+import model;
+
+fn path() -> string {
+    match (env("HOME")) {
+        Option.Some(h) => "${h}/.raydesk-tasks.json",
+        Option.None => "raydesk-tasks.json",
+    }
+}
+
+pub fn load() -> [model.Todo] {
+    let p = path();
+    if (fs.exists(p)) {
+        match (fs.read_file(p)) {
+            Result.Ok(s) => model.todos_from_json(s),
+            Result.Err(_) => [],
+        }
+    } else {
+        []
+    }
+}
+
+pub fn save(todos: [model.Todo]) -> Result<int, string> {
+    fs.write_file(path(), model.todos_to_json(todos))
+}

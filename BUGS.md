@@ -4,6 +4,9 @@ Anotaciones de comportamientos que parecen incorrectos, encontrados mientras
 se construía RayDesk. Verificados con `ray mcp` (`ray_check` / `ray_run`).
 Cada uno lleva un repro mínimo para revisarlo después.
 
+> Revisado contra **raylang 1.4.0**. Estado al día: #1 sigue vigente; #2 quedó
+> **RESUELTO** en 1.4.0.
+
 ---
 
 ## 1. `std/kv`: la API get/set documentada no existe
@@ -45,9 +48,10 @@ referencia describe una API que no se implementó.
 
 ---
 
-## 2. Coma final permitida en arrays/structs pero rechazada en llamadas
+## 2. Coma final rechazada en llamadas — ✅ RESUELTO en 1.4.0
 
-**Severidad:** baja (inconsistencia de sintaxis; sorpresa fácil de encontrar).
+**Estado:** corregido. En 1.4.0 `f(1, 2,)` **compila** (exit 0). Se deja el
+registro por trazabilidad; el texto original se conserva abajo.
 
 La coma final está permitida en literales de arreglo (`[1, 2, 3,]`) y en
 literales de struct, y `reference.md` §3 lo confirma. Pero en la **lista de

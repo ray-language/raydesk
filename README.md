@@ -1,76 +1,71 @@
 # RayDesk
 
-Un gestor de tareas de **escritorio** escrito en [raylang](https://raylang.dev).
-Ventana nativa (webview del sistema) + servidor HTTP local + persistencia en
-disco. Pensado como banco de pruebas de las características del lenguaje.
-
-![arquitectura](#arquitectura)
+Un gestor de tareas de **escritorio** escrito en [raylang](https://raylang.dev)
+(probado con **1.4.0**). Ventana nativa (webview del sistema) + backend HTTP
+local sobre el framework `web` + persistencia en disco. Pensado como banco de
+pruebas de las características del lenguaje.
 
 ## Arquitectura
 
 ```
-┌─────────────────────────┐     HTTP (127.0.0.1:PUERTO)      ┌──────────────────┐
-│  Ventana nativa          │  ───────────────────────────▶   │  Backend raylang │
-│  std/ui + webview        │   GET  /api/tasks                │  std/net server  │
-│  (assets/index.html,     │   POST /api/tasks   {title}      │  handle_api()    │
-│   app.css, app.js)       │   POST /api/toggle  {id}         │                  │
-│                          │   POST /api/delete  {id}         │  estado en la    │
-│  fetch() ◀───── JSON ────│   POST /api/clear-done           │  fibra servidora │
-└─────────────────────────┘                                  └────────┬─────────┘
-                                                                       │
-                                            std/fs + std/json          ▼
+┌─────────────────────────┐     HTTP (127.0.0.1:PUERTO)      ┌───────────────────────┐
+│  Ventana nativa          │  ───────────────────────────▶   │  Backend raylang      │
+│  std/ui + webview        │   GET  /api/tasks                │  web (Express-style)  │
+│  (assets/index.html,     │   POST /api/tasks   {title}      │   sobre net/webserver │
+│   app.css, app.js)       │   POST /api/toggle  {id}         │                       │
+│                          │   POST /api/delete  {id}         │  handlers stateless   │
+│  fetch() ◀───── JSON ────│   POST /api/clear-done           │  GET /*rest → embed   │
+└─────────────────────────┘   GET  /*rest  (assets)          └──────────┬────────────┘
+                                                                         │
+                                          std/fs + std/json (model)      ▼
                                                           ~/.raydesk-tasks.json
 ```
 
-- **UI**: `std/ui.open()` abre una ventana nativa que carga el servidor local.
-- **Servidor**: una fibra (`spawn`) corre el bucle `accept`; el hilo principal
-  atiende los eventos de la ventana y cierra el proceso al cerrarla.
-- **Estado**: la lista de tareas vive en la fibra del servidor (sin locks) y se
-  persiste como JSON tras cada mutación.
-- **Assets**: servidos con `std/embed`; en `ray build --native` se hornean en el
-  binario (una `.app` arranca con `cwd=/`, por eso van embebidos).
+- **UI**: `std/ui.open()` abre una ventana nativa que carga el servidor local;
+  el hilo principal atiende sus eventos y cierra el proceso al cerrar la ventana.
+- **Servidor**: `web.listen(build, "127.0.0.1", port)` corre en una fibra
+  (`spawn`). El puerto se obtiene libre con `std/net` (bind 0) y se reutiliza
+  para la URL de la ventana.
+- **Handlers stateless**: el archivo JSON es la única fuente de verdad
+  (load → mutar → save por request). Así no hay estado mutable compartido entre
+  las fibras de conexión del framework.
+- **Assets**: servidos con `std/embed` desde una ruta catch-all `"/*rest"`; en
+  `ray build --native` se hornean en el binario (una `.app` arranca con `cwd=/`).
 
-Todo el backend está en un único `src/main.ray` a propósito: así se puede
-type-checkear y testear entero a través del MCP de raylang (`ray mcp`).
+## Módulos
+
+```
+src/
+├── model.ray   # Todo + JSON + operaciones puras (add/toggle/remove/clear) + @test
+├── store.ray   # persistencia en disco (std/fs)
+└── main.ray    # app web (rutas), assets embebidos, ventana std/ui + event loop
+```
 
 ## Ejecutar
 
 ```sh
+ray add web             # (ya en ray.toml) descarga web + net del registro
 ray run                 # abre la ventana (dev: assets en vivo desde disco)
 ray dev                 # igual, con recarga al guardar cambios
-ray test                # corre los @test de la lógica (6 tests)
+ray test                # corre los @test del proyecto (3 tests en model)
 ray build --native --release
 ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .desktop
 ```
 
-> Nota: el MCP de raylang corre en un sandbox sin pantalla, así que la ventana
-> real se abre en tu máquina con `ray run`. La lógica de servidor y de datos sí
-> está verificada de punta a punta vía `ray_run`/`ray_test` (incluido un test de
-> integración cliente/servidor sobre socket, con contenido UTF-8).
+> Verificado con el MCP de raylang usando el parámetro `path` (contexto de
+> proyecto: resuelve módulos y dependencias). El servidor `web` se probó headless
+> con `curl` (rutas, assets con su `Content-Type`, API con persistencia, 404).
+> La ventana real se abre en tu máquina con `ray run`.
 
 ## Características de raylang ejercitadas
 
-`std/ui` · `std/net` · `std/fs` · `std/json` · `std/embed` · `std/uuid` ·
-`std/time` · concurrencia (`spawn`, estado por fibra) · `struct`/`enum` ·
-pattern matching · `Result`/`Option` + `?` · closures (`map`/`filter`) ·
-tuplas · `@test`.
+paquete `web` (Tier-2) · `std/ui` · `std/net` · `std/embed` · `std/fs` ·
+`std/json` · `std/uuid` (`uuid_v7`) · `std/time` · módulos + `pub` ·
+concurrencia (`spawn`) · `struct`/`enum` · pattern matching ·
+`Result`/`Option` + `?` · closures (`map`/`filter`) · `@test`.
 
 ## Notas de desarrollo
 
-- [`ROADMAP.md`](ROADMAP.md) — características que se echaron de menos.
-- [`BUGS.md`](BUGS.md) — posibles bugs detectados (con repro).
-
-## Estructura
-
-```
-raydesk/
-├── ray.toml            # paquete + [native] embed = ["assets"]
-├── src/main.ray        # backend completo (modelo, servidor, API, main, tests)
-├── assets/
-│   ├── index.html
-│   ├── app.css
-│   └── app.js
-├── README.md
-├── ROADMAP.md
-└── BUGS.md
-```
+- [`ROADMAP.md`](ROADMAP.md) — características que se echaron de menos (con lo ya
+  resuelto en 1.4.0).
+- [`BUGS.md`](BUGS.md) — posibles bugs con repro (`std/kv` get/set ausente).

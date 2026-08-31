@@ -1,37 +1,68 @@
 # RayLang — características que se echaron de menos
 
-Lista de deseos surgida al construir **RayDesk** (una app de escritorio real:
-ventana nativa + servidor HTTP local + persistencia). No son bugs (esos van en
-[`BUGS.md`](BUGS.md)), sino huecos de API, ergonomía o documentación que
-habrían hecho el trabajo más directo. Ordenado por impacto percibido.
+Lista de deseos surgida al construir **RayDesk** (app de escritorio real:
+ventana nativa + backend HTTP local + persistencia). No son bugs (esos van en
+[`BUGS.md`](BUGS.md)), sino huecos de API, ergonomía o documentación.
+
+> Revisado contra **raylang 1.4.0**. Varias entradas de la primera pasada ya
+> quedaron cubiertas por el propio lenguaje/ecosistema; se marcan como
+> ✅ RESUELTO y se conservan por trazabilidad.
 
 ---
 
-## 1. Un servidor/router HTTP mínimo en la stdlib
+## ✅ RESUELTO — verificación multi-módulo desde el MCP
 
-El patrón recomendado para apps de escritorio (`std/ui`) es *"tu webserver
-embebido en 127.0.0.1"*, pero el único webserver está en **`packages/net`**
-(Tier 2, no embebido). Para un proyecto autocontenido hubo que escribir a mano
-sobre `std/net`:
+En la primera versión, `ray_check`/`ray_run`/`ray_test` solo compilaban un
+archivo autocontenido (parámetro `code`), así que un proyecto multi-módulo no se
+podía validar por el MCP. En 1.4.0 el `llms.txt` documenta el parámetro
+**`path`**: las tres tools corren con el proyecto como contexto (resuelven
+imports entre archivos y `[dependencies]` igual que `ray run`). RayDesk pasó a
+ser un proyecto de verdad (`src/model.ray`, `src/store.ray`, `src/main.ray`) y
+se valida entero por MCP con `path`.
 
-- parseo de la request line y las cabeceras,
-- lectura del cuerpo respetando `Content-Length` (en bytes, no en caracteres),
-- construcción de respuestas y `Content-Type`.
+## ✅ RESUELTO (vía paquete Tier-2) — base HTTP para apps de escritorio
 
-Es *boilerplate* que casi toda app local va a reescribir. **Deseable:** un
-`std/http` mínimo (aunque sea solo el lado servidor: parseo de request +
-helpers de respuesta + router por ruta/método), o mover un subconjunto de
-`packages/net/webserver` a la stdlib embebida.
+La primera versión escribía a mano el parseo HTTP sobre `std/net`. El `llms.txt`
+de 1.4.0 explicita el paquete **`web`** (Express-style sobre `net/webserver`),
+descrito como *"la base recomendada para backends de escritorio con `std/ui`"*.
+RayDesk ahora lo usa (`ray add web`): rutas, catch-all `"/*rest"` para servir los
+assets embebidos, y `web.listen` en una fibra mientras `std/ui` corre en el hilo
+principal. Se eliminó todo el HTTP hecho a mano.
 
-## 2. Un puente IPC de primera clase para `std/ui`
+Queda como deseo **menor**: un servidor mínimo en la *stdlib embebida* (sin
+`ray add`) para apps locales de cero dependencias.
 
-`std/ui` da `eval_js(h, js)` (raylang → JS, *fire-and-forget*) pero el camino
-de vuelta (JS → raylang) hay que fabricarlo con un servidor HTTP local. Un
-canal de mensajes bidireccional tipado (p. ej. `ui.on_message()` +
-`window.raydesk.send(...)` en el webview) eliminaría por completo la necesidad
-del servidor para la mayoría de apps.
+---
 
-## 3. Ergonomía: tupla/paréntesis como expresión final de un bloque
+## Pendientes
+
+### 1. Un puente IPC de primera clase para `std/ui`
+
+`std/ui` da `eval_js(h, js)` (raylang → JS) pero el camino de vuelta (JS →
+raylang) hay que fabricarlo con un servidor HTTP local (ahora con `web`). Un
+canal de mensajes bidireccional tipado (`ui.on_message()` + `window.raydesk.send`
+en el webview) evitaría el servidor para la mayoría de apps.
+
+### 2. Descubrir un puerto libre para `web.listen`
+
+`web.listen(build, host, port)` exige un puerto fijo y **bloquea**. Para una app
+de escritorio hay que abrir la ventana en el mismo puerto, así que RayDesk pide
+un puerto efímero con `std/net` (bind 0 → `local_port` → `close`) y se lo pasa a
+`web.listen` — hay una micro-ventana de carrera entre el `close` y el re-bind.
+**Deseable:** que `web.listen`/`webserver.serve*` acepten puerto `0` y devuelvan
+el puerto elegido (p. ej. por un canal/callback), o un `bind()` + `serve(listener)`
+separados.
+
+### 3. `web.static_embedded` no existe (pese al `llms.txt`)
+
+El `llms.txt` dice que `web` trae `static_embedded` "para los assets de
+`[native] embed`", pero el paquete solo expone `static_files`/`static_files_cached`
+(sirven desde un **directorio en disco**, que no vale en una `.app` con `cwd=/`).
+Por eso RayDesk sirve los assets embebidos con una ruta catch-all + `std/embed`.
+**Deseable:** implementar `static_embedded(app, prefix)` sobre `std/embed`, o
+corregir el `llms.txt`.
+
+### 4. Ergonomía: tupla/paréntesis como expresión final de un bloque
 
 ```raylang
 fn f(...) -> (string, [Todo]) {
@@ -40,61 +71,55 @@ fn f(...) -> (string, [Todo]) {
 }
 ```
 
-Hay que intercalar un `let` para romper la ambigüedad. El error es claro, pero
-una expresión-tupla al final de un bloque es una forma muy común (sobre todo al
-devolver varios valores). **Deseable:** resolver la ambigüedad a favor de la
-tupla cuando el bloque previo es una sentencia `if`/`while` sin `else`, o al
-menos que `ray fmt` inserte el separador.
+Hay que intercalar un `let` para romper la ambigüedad. El error es claro, pero es
+una forma muy común al devolver varios valores. **Deseable:** resolver a favor de
+la tupla cuando el bloque previo es una sentencia, o que `ray fmt` lo separe.
 
-## 4. Documentación de módulos accesible desde el MCP / `ray doc`
+### 5. Documentación de módulos accesible desde el MCP / `ray doc`
 
 `ray_doc` (MCP) solo cubre *builtins*; no da la firma de una función de módulo
-(`fs.write_file`, `kv.*`, `ui.*`). Para descubrir la API hubo que probar por
-compilación (`ray_check` como oráculo). **Deseable:** `ray_doc "fs.write_file"`
-o un `ray doc std/fs` que liste las exportaciones de un módulo. Relacionado con
-los huecos de la referencia (ver #6).
+(`fs.write_file`, `ui.*`) ni de un paquete (`web.*`). Para aprender la API de
+`web` hubo que **leer su código** en `.ray-deps/web/framework.ray`. **Deseable:**
+`ray_doc "web.listen"` o `ray doc <paquete>` que liste exportaciones y firmas.
 
-## 5. Mejor diagnóstico al chocar con un builtin genérico
+### 6. Mejor diagnóstico al chocar con un builtin genérico
 
 `struct Task { … }` → `Task expects 1 type argument, not 0`. El mensaje no dice
-que `Task` es un builtin (`Task<T>`, concurrencia) y que el nombre está tomado.
-**Deseable:** algo como *"'Task' es un tipo builtin (Task<T>); elige otro
-nombre"*.
+que `Task` es un builtin (`Task<T>`, concurrencia). **Deseable:** *"'Task' es un
+tipo builtin (Task<T>); elige otro nombre"*.
 
-## 6. Huecos en `reference.md`
-
-Encontrados al vuelo (la implementación va por delante de la doc):
+### 7. Huecos en `reference.md`
 
 - **`std/fs.mkdir`** existe y compila, pero **no aparece** en la superficie de
-  `std/fs` de la referencia §10. (Útil, por ejemplo, para crear `~/.raydesk/`.)
+  `std/fs` de la referencia §10.
 - **`std/kv`** documenta un get/set que no existe (ver `BUGS.md #1`).
+- El **paquete `web`** no está documentado en la referencia §11 (que solo cubre
+  `net`, `rpc`, `db`), aunque el `llms.txt` sí lo menciona.
 
-**Deseable:** mantener §10 sincronizada con las exportaciones reales, o
+**Deseable:** mantener la referencia sincronizada con la superficie real, o
 generarla desde el código.
 
-## 7. Verificación multi-módulo desde el MCP
+### 8. Estado compartido entre handlers del framework `web`
 
-`ray_check`/`ray_run` compilan **un archivo autocontenido** en un tmp aislado,
-así que un proyecto multi-módulo no se puede verificar módulo a módulo por el
-MCP (las importaciones a archivos propios no resuelven). Por eso RayDesk mantiene
-todo el backend en un único `src/main.ray`. **Deseable:** un modo del MCP que
-compile en el contexto del proyecto (`ray.toml`) para poder dividir en módulos
-sin perder la validación por agente.
+Con `web`, cada conexión corre en su fibra y las fibras tienen heaps aislados, así
+que no se puede compartir un `var todos` capturado entre handlers. RayDesk lo
+resuelve siendo **stateless** (carga/guarda el archivo por request; la app es
+mono-usuario y los datos son pequeños). Para algo con más carga haría falta el
+patrón actor (un dueño de estado + canales) o `std/kv` en su forma `share`.
+**Deseable:** un helper de estado por-app en `web` (p. ej. un actor de sesión de
+aplicación) para no reimplementarlo en cada proyecto.
 
 ---
 
 ## Cosas que SÍ estaban y funcionaron muy bien
 
-Para equilibrar: el lenguaje cubrió la mayor parte de la app sin fricción.
-
-- `std/ui` (ventana + webview del sistema) y `std/embed` (assets embebidos) —
-  la app de escritorio nativa sale "de fábrica".
-- `std/net` TCP: `tcp_listen`/`accept`/`socket_read`/`socket_write_bytes` +
-  `local_port` bastaron para el servidor; el binding a puerto 0 da puerto libre.
-- Concurrencia: `spawn` para el servidor en paralelo a la UI, con estado mutable
-  encapsulado en la fibra del servidor (sin locks).
-- `std/json` (parse/stringify + enum `Json`) — serialización limpia; maneja
-  UTF-8 correctamente (probado con acentos end-to-end).
-- `std/fs`, `std/uuid` (`uuid_v7` ordenable por tiempo), `std/time`.
-- `Result`/`Option` + `?` — el manejo de errores del servidor quedó conciso.
-- `@test` + `ray test` — 6 tests de la lógica pura, todos verdes vía MCP.
+- `std/ui` (ventana + webview) + `std/embed` (assets embebidos) — app de
+  escritorio nativa "de fábrica".
+- El paquete **`web`**: routing, catch-all `"/*rest"`, `web.json`/`web.body`,
+  escritura directa de `Res.body` (bytes) para servir binario — muy directo.
+- `ray add` resolvió `web` + `net` desde el registro sin fricción.
+- Concurrencia: `spawn` para el servidor en paralelo a la UI.
+- `std/json`, `std/fs`, `std/uuid` (`uuid_v7`), `std/time`.
+- `Result`/`Option` + `?`, closures, `@test` (3 tests del `model`, verdes por MCP).
+- **Verificación por `path`**: `ray_check`/`ray_test` sobre el proyecto real,
+  con dependencias resueltas.

@@ -7,3 +7,6 @@ version = "0.1.0"
 # (a bundled macOS .app launches with cwd=/). In dev (ray run / ray dev) these
 # same files are read live from disk.
 embed = ["assets"]
+
+[dependencies]
+web = "^0.1.0"

@@ -31,12 +31,15 @@ de pruebas de las características del lenguaje.
   hornea en el binario (una `.app` arranca con `cwd=/`).
 - **Verbos**: los mounts de estáticos sirven GET/HEAD antes que las rutas, así que
   la API va como **POST** (incluida la lectura `/api/list`).
-- **Menús** (`std/ui`): menús nativos "Archivo" (Nueva tarea ⌘N, Exportar
-  tareas… ⌘E, Recargar ⌘R) y "Tarea" (Limpiar completadas ⌘K). El click llega
-  como evento `"menu"` con `tag`; las acciones manejan el frontend vía
+- **Menús** (`std/ui`): menús nativos "Archivo" (Acerca de RayDesk, Nueva tarea
+  ⌘N, Exportar tareas… ⌘E, Recargar ⌘R) y "Tarea" (Limpiar completadas ⌘K). El
+  click llega como evento `"menu"` con `tag`; las acciones manejan el frontend vía
   `ui.eval_js` (reusan los handlers de la página, así la UI queda sincronizada) y
-  "Exportar" abre el diálogo nativo `ui.save_file`. Los menús estándar App/Edit
+  "Exportar" abre el diálogo nativo `ui.save_file`. "Acerca de RayDesk" abre un
+  modal informativo (versión, creador) en la webview. Los menús estándar App/Edit
   (⌘Q, portapapeles, undo) se instalan solos.
+  > Nota: `std/ui` no permite inyectar en el menú de app de macOS (el "About"
+  > clásico va ahí), así que el item vive al inicio del menú "Archivo".
 - **Persistencia**: `std/kv` con **una clave por tarea** (la clave es el `id`, un
   `uuid_v7` ordenable por tiempo, así `keys()` viene en orden de creación) y
   **guardado atómico** (temp + rename). Es la única fuente de verdad; los handlers

@@ -88,4 +88,24 @@ function reportError(err) {
     console.error(err);
 }
 
+// About modal — opened from the native "Acerca de RayDesk" menu via ui.eval_js.
+const aboutOverlay = document.getElementById("about-overlay");
+const aboutClose = document.getElementById("about-close");
+
+window.rayShowAbout = function () {
+    aboutOverlay.classList.add("open");
+};
+
+function hideAbout() {
+    aboutOverlay.classList.remove("open");
+}
+
+aboutClose.addEventListener("click", hideAbout);
+aboutOverlay.addEventListener("click", (e) => {
+    if (e.target === aboutOverlay) hideAbout();
+});
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideAbout();
+});
+
 refresh().catch(reportError);

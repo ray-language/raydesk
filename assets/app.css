@@ -160,3 +160,75 @@ body {
     font-size: 14px;
     margin-top: 32px;
 }
+
+/* About modal */
+.overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 10;
+}
+
+.overlay.open {
+    display: flex;
+}
+
+.about {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 28px 22px;
+    width: 320px;
+    max-width: 100%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+
+.about h2 {
+    margin: 0;
+    font-size: 24px;
+    letter-spacing: -0.02em;
+}
+
+.about-tagline {
+    margin: 6px 0 20px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.about-meta {
+    margin: 0 0 22px;
+    text-align: left;
+}
+
+.about-meta > div {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-top: 1px solid var(--border);
+    font-size: 14px;
+}
+
+.about-meta dt {
+    color: var(--muted);
+}
+
+.about-meta dd {
+    margin: 0;
+    font-weight: 600;
+}
+
+.about button {
+    padding: 9px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 9px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+}

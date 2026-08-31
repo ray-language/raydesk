@@ -11,10 +11,9 @@ TARGETED_DEVICE_FAMILY = 1,2
 SDKROOT = iphoneos
 CLANG_ENABLE_MODULES = YES
 CLANG_ENABLE_OBJC_ARC = YES
-// Firma: definida AQUÍ (no en Xcode → Signing & Teams) para que sobreviva a
-// `ray bundle --ios`, que regenera el pbxproj y borra el DEVELOPMENT_TEAM que la
-// UI de Xcode escribe allí. Como este xcconfig es el baseConfigurationReference,
-// el valor aplica a todas las configs. Cambia el team por el tuyo si hace falta.
+// Firma. OJO: `ray bundle --ios` REGENERA este archivo entero (no solo el
+// pbxproj), así que estas líneas se borran en cada bundle. Para no perderlas usa
+// `raydesk-ios/rebuild.sh` (hace el bundle y las vuelve a inyectar). Ver ROADMAP #9.
 CODE_SIGN_STYLE = Automatic
 DEVELOPMENT_TEAM = A2CY27N22G
 // El staticlib del programa raylang: mismo nombre en ambos dirs, la RUTA elige por SDK

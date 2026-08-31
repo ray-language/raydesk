@@ -1,0 +1,178 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0000000000000000000000B1 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F1 /* main.m */; };
+		0000000000000000000000B2 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 0000000000000000000000F3 /* AppDelegate.m */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		0000000000000000000000F1 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		0000000000000000000000F2 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
+		0000000000000000000000F3 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
+		0000000000000000000000F4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0000000000000000000000F5 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
+		0000000000000000000000F6 /* raydesk.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = raydesk.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0000000000000000000000E1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0000000000000000000000A1 /* Shell */ = {
+			isa = PBXGroup;
+			children = (
+				0000000000000000000000F1 /* main.m */,
+				0000000000000000000000F2 /* AppDelegate.h */,
+				0000000000000000000000F3 /* AppDelegate.m */,
+				0000000000000000000000F4 /* Info.plist */,
+			);
+			path = Shell;
+			sourceTree = "<group>";
+		};
+		0000000000000000000000A2 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0000000000000000000000F6 /* raydesk.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		0000000000000000000000A3 = {
+			isa = PBXGroup;
+			children = (
+				0000000000000000000000A1 /* Shell */,
+				0000000000000000000000F5 /* App.xcconfig */,
+				0000000000000000000000A2 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0000000000000000000000D1 /* raydesk */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000000000000000000C3 /* Build configuration list for PBXNativeTarget "raydesk" */;
+			buildPhases = (
+				0000000000000000000000E2 /* Sources */,
+				0000000000000000000000E1 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = raydesk;
+			productName = raydesk;
+			productReference = 0000000000000000000000F6 /* raydesk.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		0000000000000000000000D2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 1500;
+			};
+			buildConfigurationList = 0000000000000000000000C4 /* Build configuration list for PBXProject "raydesk" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 0000000000000000000000A3;
+			productRefGroup = 0000000000000000000000A2 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0000000000000000000000D1 /* raydesk */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0000000000000000000000E2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0000000000000000000000B1 /* main.m in Sources */,
+				0000000000000000000000B2 /* AppDelegate.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		0000000000000000000000C1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0000000000000000000000F5 /* App.xcconfig */;
+			buildSettings = {
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ONLY_ACTIVE_ARCH = YES;
+			};
+			name = Debug;
+		};
+		0000000000000000000000C2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0000000000000000000000F5 /* App.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		0000000000000000000000C5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0000000000000000000000F5 /* App.xcconfig */;
+			buildSettings = {
+				DEVELOPMENT_TEAM = A2CY27N22G;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		0000000000000000000000C6 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 0000000000000000000000F5 /* App.xcconfig */;
+			buildSettings = {
+				DEVELOPMENT_TEAM = A2CY27N22G;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0000000000000000000000C3 /* Build configuration list for PBXNativeTarget "raydesk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0000000000000000000000C5 /* Debug */,
+				0000000000000000000000C6 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		0000000000000000000000C4 /* Build configuration list for PBXProject "raydesk" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0000000000000000000000C1 /* Debug */,
+				0000000000000000000000C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 0000000000000000000000D2 /* Project object */;
+}

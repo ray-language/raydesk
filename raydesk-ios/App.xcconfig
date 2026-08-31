@@ -1,0 +1,18 @@
+// Generado por `ray bundle --ios` — ajusta aquí, no en el pbxproj.
+PRODUCT_NAME = raydesk
+PRODUCT_BUNDLE_IDENTIFIER = org.raylang.raydesk
+MARKETING_VERSION = 0.1.0
+IPHONEOS_DEPLOYMENT_TARGET = 15.0
+// Solo arm64: dispositivo y simulador moderno (el .a no trae x86_64; un Mac Intel
+// exigiría además el target x86_64-apple-ios — fuera del v1).
+ARCHS = arm64
+INFOPLIST_FILE = Shell/Info.plist
+TARGETED_DEVICE_FAMILY = 1,2
+SDKROOT = iphoneos
+CLANG_ENABLE_MODULES = YES
+CLANG_ENABLE_OBJC_ARC = YES
+// El staticlib del programa raylang: mismo nombre en ambos dirs, la RUTA elige por SDK
+// (dispositivo y simulador son ambos arm64 — jamás un lipo).
+LIBRARY_SEARCH_PATHS[sdk=iphoneos*] = $(PROJECT_DIR)/libs
+LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*] = $(PROJECT_DIR)/libs-sim
+OTHER_LDFLAGS = -lray_app -framework WebKit -lobjc

@@ -4,23 +4,29 @@ Anotaciones de comportamientos que parecen incorrectos, encontrados mientras
 se construía RayDesk. Verificados con `ray mcp` (`ray_check` / `ray_run`).
 Cada uno lleva un repro mínimo.
 
-> **Revisado contra raylang 1.4.0.** Estado al día:
-> - #1 (`std/kv`) — **reclasificado**: no es "API inexistente" sino un error de
->   documentación; el módulo funciona con su API real (métodos). Sigue abierto
->   como bug de doc.
+> **Revisado contra raylang 1.4.0** (segunda pasada, tras la actualización de
+> `reference.md`). Estado al día:
+> - #1 (`std/kv`) — ✅ **RESUELTO**: la referencia §10 ya describe la API real
+>   (métodos del trait `StoreOps`); no queda nada que arreglar.
 > - #2 (coma final en llamadas) — ✅ **RESUELTO** en 1.4.0.
 > - Nota "struct Task" — ✅ el **mensaje** ya es claro en 1.4.0.
 > - Nota "tupla tras `if`" — sigue vigente (papercut documentado).
 
 ---
 
-## 1. `std/kv`: la referencia describe la API como `get`/`set` libres, pero es de métodos
+## 1. `std/kv`: la referencia describía mal la API — ✅ RESUELTO
 
-**Severidad:** baja (bug de **documentación**; el módulo funciona).
+**Estado:** corregido en la referencia (2ª pasada). `reference.md` §10 ahora dice
+explícitamente que las operaciones son **métodos del trait `StoreOps`**:
+`open(path) -> Result<Store, _>`/`empty(path)` y `s.get`/`s.set` (bytes),
+`s.get_string`/`s.set_string`, `s.delete(k) -> bool`, `s.keys()`. Además `ray_doc
+"kv.get_string"` lo documenta (*"trait StoreOps — method-call style"*). Ya no hay
+discrepancia. Se conserva el registro histórico abajo.
 
-**Corrección respecto a la primera versión de esta nota:** antes concluí que
-`std/kv` era inutilizable. Es falso — me engañó la referencia. El módulo
-funciona; lo que está mal es cómo lo describe `reference.md` §10:
+**Historia (por qué se anotó):** en la primera pasada concluí que `std/kv` era
+inutilizable. Era falso — me engañó la redacción "get/set", que leí como funciones
+libres `kv.get`/`kv.set` (que no existen; son métodos). El módulo siempre
+funcionó. Texto original de la referencia que causó la confusión (§10):
 
 > `Store` — estado clave/valor persistido: `open(path)`/`empty` + **get/set** sobre
 > `Map<string, bytes>` …

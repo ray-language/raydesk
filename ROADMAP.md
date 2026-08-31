@@ -43,24 +43,26 @@ raylang) hay que fabricarlo con un servidor HTTP local (ahora con `web`). Un
 canal de mensajes bidireccional tipado (`ui.on_message()` + `window.raydesk.send`
 en el webview) evitaría el servidor para la mayoría de apps.
 
-### 2. Descubrir un puerto libre para `web.listen`
+### 🟡 RESUELTO UPSTREAM (pendiente de publicar) — 2. Puerto libre para `web.listen`
 
-`web.listen(build, host, port)` exige un puerto fijo y **bloquea**. Para una app
-de escritorio hay que abrir la ventana en el mismo puerto, así que RayDesk pide
-un puerto efímero con `std/net` (bind 0 → `local_port` → `close`) y se lo pasa a
-`web.listen` — hay una micro-ventana de carrera entre el `close` y el re-bind.
-**Deseable:** que `web.listen`/`webserver.serve*` acepten puerto `0` y devuelvan
-el puerto elegido (p. ej. por un canal/callback), o un `bind()` + `serve(listener)`
-separados.
+El problema (carrera close/re-bind al descubrir el puerto) ya tiene solución en
+el lenguaje: **`web.listen_on(build, listener)`** (M150), el split bind/serve —
+`net.tcp_listen(host, 0)` + `net.local_port` primero (el programa CONOCE su
+puerto sin carrera; el backlog acepta desde el bind). Está en la `reference.md`
+§11, **pero aún no en el paquete publicado `web` 0.1.0** (`web.listen_on` da
+`module 'web/framework' does not export 'listen_on'`). RayDesk seguirá con
+`free_port()` (bind 0 → `local_port` → `close`) hasta que se publique; la carrera
+es inocua en localhost mono-usuario. **Acción al publicarse:** cambiar a
+`web.listen_on(build, listener)` (ver comentario en `src/main.ray`).
 
-### 3. `web.static_embedded` no existe (pese al `llms.txt`)
+### 🟡 RESUELTO UPSTREAM (pendiente de publicar) — 3. `web.static_embedded`
 
-El `llms.txt` dice que `web` trae `static_embedded` "para los assets de
-`[native] embed`", pero el paquete solo expone `static_files`/`static_files_cached`
-(sirven desde un **directorio en disco**, que no vale en una `.app` con `cwd=/`).
-Por eso RayDesk sirve los assets embebidos con una ruta catch-all + `std/embed`.
-**Deseable:** implementar `static_embedded(app, prefix)` sobre `std/embed`, o
-corregir el `llms.txt`.
+Ya existe en el lenguaje: **`static_embedded(app, prefix, dir)`** (M147) sirve del
+espacio `[native] embed` (disco en vivo en dev, horneado en nativo). Está en la
+`reference.md` §11, **pero aún no en el paquete publicado `web` 0.1.0**. Por eso
+RayDesk sigue sirviendo los assets con una ruta catch-all `"/*rest"` + `std/embed`
+(equivalente, ~15 líneas). **Acción al publicarse:** reemplazar `serve_asset` +
+`content_type` por `web.static_embedded(app, "/", "assets")`.
 
 ### 4. Ergonomía: tupla/paréntesis como expresión final de un bloque
 
@@ -75,12 +77,14 @@ Hay que intercalar un `let` para romper la ambigüedad. El error es claro, pero 
 una forma muy común al devolver varios valores. **Deseable:** resolver a favor de
 la tupla cuando el bloque previo es una sentencia, o que `ray fmt` lo separe.
 
-### 5. Documentación de módulos accesible desde el MCP / `ray doc`
+### ✅ RESUELTO — 5. Documentación de módulos desde el MCP / `ray doc`
 
-`ray_doc` (MCP) solo cubre *builtins*; no da la firma de una función de módulo
-(`fs.write_file`, `ui.*`) ni de un paquete (`web.*`). Para aprender la API de
-`web` hubo que **leer su código** en `.ray-deps/web/framework.ray`. **Deseable:**
-`ray_doc "web.listen"` o `ray doc <paquete>` que liste exportaciones y firmas.
+`ray_doc` ahora resuelve funciones de módulo std (`ray_doc "fs.write_file"`),
+**métodos de trait** (`ray_doc "kv.get_string"` → *"trait StoreOps"*) y símbolos de
+paquete pasando `path` (`ray_doc "web.listen"` sobre el proyecto). Ya no hace falta
+leer el código del paquete para conocer una firma. (Queda como deseo menor: un
+listado de TODAS las exportaciones de un módulo — `ray_doc "std/kv"` responde
+"usa module.function").
 
 ### ✅ RESUELTO — 6. Diagnóstico al chocar con un builtin genérico
 
@@ -94,16 +98,20 @@ same name; rename your type
 
 Justo lo que se pedía. (Ver `BUGS.md`.)
 
-### 7. Huecos en `reference.md`
+### ✅ RESUELTO — 7. Huecos en `reference.md`
 
-- **`std/fs.mkdir`** existe y compila, pero **no aparece** en la superficie de
-  `std/fs` de la referencia §10.
-- **`std/kv`** documenta un get/set que no existe (ver `BUGS.md #1`).
-- El **paquete `web`** no está documentado en la referencia §11 (que solo cubre
-  `net`, `rpc`, `db`), aunque el `llms.txt` sí lo menciona.
+Los tres huecos que se habían anotado ya están corregidos en la referencia:
 
-**Deseable:** mantener la referencia sincronizada con la superficie real, o
-generarla desde el código.
+- **`std/fs.mkdir`** aparece ahora en la superficie de `std/fs` §10 (y en `ray_doc`:
+  *"Creates a directory, including any missing parents (like `mkdir -p`)"*).
+- **`std/kv`** §10 describe la API real (métodos del trait `StoreOps`:
+  `s.get`/`s.set`/`s.get_string`/`s.set_string`/`s.delete`/`s.keys`). Ver `BUGS.md #1`.
+- El **paquete `web`** tiene su propia sección en §11 (título ahora
+  `net`, `web`, `rpc`, `db`).
+
+Queda un desajuste **inverso** menor: la referencia §11 documenta `listen_on` y
+`static_embedded` (M150/M147) que aún no están en el paquete publicado 0.1.0
+(ver #2 y #3) — ahora la doc va por delante del paquete.
 
 ### 8. Estado compartido entre handlers del framework `web`
 

@@ -63,6 +63,10 @@ fn api_clear(c: web.Ctx, r: web.Res) -> unit {
 }
 
 // --- Static assets from the embedded bundle (catch-all GET) ---
+//
+// TODO(web>0.1.0): replace this handler + `content_type` + the "/*rest" route
+// with `web.static_embedded(app, "/", "assets")` (M147) once the published
+// package exports it — it serves the same [native] embed namespace directly.
 
 fn serve_asset(c: web.Ctx, r: web.Res) -> unit {
     let rest = web.param(c, "rest");
@@ -97,6 +101,10 @@ fn build() -> web.App {
 
 // Ask the OS for a free ephemeral port, then hand it to the web server. The
 // tiny gap between close and re-bind is harmless for a local single-user app.
+//
+// TODO(web>0.1.0): switch to the race-free split `web.listen_on(build, listener)`
+// (M150): `let l = net.tcp_listen("127.0.0.1", 0)?; let port = net.local_port(l);`
+// then spawn `web.listen_on(build, l)` — no close/re-bind. Pending package publish.
 fn free_port() -> int {
     match (net.tcp_listen("127.0.0.1", 0)) {
         Result.Ok(l) => {

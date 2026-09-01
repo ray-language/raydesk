@@ -69,18 +69,18 @@ listener. Se eliminó `free_port()` y su micro-carrera close/re-bind.
 las rutas, así que la API se expone como **POST** (incluida la lectura
 `/api/list`) — el modelo explícito "GET = assets, POST = rutas".
 
-### 4. Ergonomía: tupla/paréntesis como expresión final de un bloque
+### ✅ RESUELTO — 4. Ergonomía: tupla como expresión final de un bloque
+
+Antes, una tupla como expresión final tras un `if`/bloque se parseaba como
+*llamada* del valor del bloque (había que intercalar un `let`). El parser ya lo
+resuelve a favor de la tupla — este repro compila y ejecuta (devuelve `(1, 2)`):
 
 ```raylang
-fn f(...) -> (string, [Todo]) {
-    if (cond) { xs.push(...); }
-    (payload, xs)   // ← se parsea como  if{...}(payload, xs)  → error
+fn f(cond: bool) -> (int, int) {
+    if (cond) { let _x = 1; }
+    (1, 2)   // ahora: es el valor de retorno
 }
 ```
-
-Hay que intercalar un `let` para romper la ambigüedad. El error es claro, pero es
-una forma muy común al devolver varios valores. **Deseable:** resolver a favor de
-la tupla cuando el bloque previo es una sentencia, o que `ray fmt` lo separe.
 
 ### ✅ RESUELTO — 5. Documentación de módulos desde el MCP / `ray doc`
 

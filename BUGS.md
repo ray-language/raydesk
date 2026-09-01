@@ -10,7 +10,7 @@ Cada uno lleva un repro mínimo.
 >   (métodos del trait `StoreOps`); no queda nada que arreglar.
 > - #2 (coma final en llamadas) — ✅ **RESUELTO** en 1.4.0.
 > - Nota "struct Task" — ✅ el **mensaje** ya es claro en 1.4.0.
-> - Nota "tupla tras `if`" — sigue vigente (papercut documentado).
+> - Nota "tupla tras `if`" — ✅ **RESUELTO** (el parser ya la acepta como retorno).
 
 ---
 
@@ -103,14 +103,14 @@ expression, found RParen`. Molestaba en llamadas multi-línea (la forma a la que
 
   RayDesk usa `Todo`. La mejora de mensaje que se pedía en el ROADMAP ya está.
 
-- **Tupla como expresión final tras un `if`/bloque** se parsea como *llamada* del
-  valor del bloque (sigue en 1.4.0). Está documentado en `llms.txt` y el error lo
-  explica (*"a tail starting with '(' … separate it with 'return' or 'let'"*). No
-  es un bug; es un papercut ergonómico (ver ROADMAP #4). Repro:
+- **Tupla como expresión final tras un `if`/bloque** — ✅ **RESUELTO**. Antes se
+  parseaba como *llamada* del valor del bloque (*"a tail starting with '(' …"*);
+  ahora este repro **compila y ejecuta** (devuelve `(1, 2)`), verificado con
+  `ray_run`:
 
   ```raylang
   fn f(cond: bool) -> (int, int) {
       if (cond) { let _x = 1; }
-      (1, 2)   // ← error: se parsea como  if{...}(1, 2)
+      (1, 2)   // antes: error; ahora: es el valor de retorno
   }
   ```

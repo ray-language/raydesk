@@ -83,11 +83,12 @@
 }
 
 /* Use the user's real macOS accent color where WebKit supports it (kept last so
-   it wins in both light and dark). */
+   it wins in both light and dark). Keep the label WHITE (`--accent-ink`): the
+   `AccentColorText` system color isn't reliably supported in the webview and fell
+   back to black, and macOS accent buttons use white labels anyway. */
 @supports (color: AccentColor) {
     :root {
         --accent: AccentColor;
-        --accent-ink: AccentColorText;
     }
 }
 

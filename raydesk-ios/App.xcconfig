@@ -1,7 +1,7 @@
 // Generado por `ray bundle --ios` — ajusta aquí, no en el pbxproj.
 PRODUCT_NAME = raydesk
 PRODUCT_BUNDLE_IDENTIFIER = org.raylang.raydesk
-MARKETING_VERSION = 0.1.0
+MARKETING_VERSION = 0.2.0
 IPHONEOS_DEPLOYMENT_TARGET = 15.0
 // Solo arm64: dispositivo y simulador moderno (el .a no trae x86_64; un Mac Intel
 // exigiría además el target x86_64-apple-ios — fuera del v1).

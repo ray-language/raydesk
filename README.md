@@ -23,10 +23,13 @@ pruebas de las características del lenguaje.
 - **UI**: `std/ui.open()` abre una ventana nativa que carga la página; la **fibra
   principal** corre el event loop (`ui.next_event`) y cierra el proceso al cerrar
   la ventana.
-- **Datos (IPC, `std/ui`)**: la página envía comandos con **`window.ray.send(json)`**
-  (p. ej. `{"cmd":"add","title":…}`); llegan como evento `"message"` →
-  `handle_message` muta el store `kv` → **`ui.eval_js(win, "window.rayRender(…)")`**
-  empuja el estado nuevo a la página. Sin API HTTP de por medio.
+- **Datos (IPC, `std/ui`)**: la página llama **`window.ray.request(cmd)`** (p. ej.
+  `{"cmd":"add","title":…}`) y recibe una **Promise** que resuelve con la lista
+  actualizada (JSON). En raylang llega como evento `"message"`; `handle_message`
+  lo decodifica con **`ui.as_request`**, muta el store `kv` y resuelve la Promise
+  con **`ui.reply(window, id, json)`**. Sin API HTTP. (Fallback: `window.ray.send`
+  fire-and-forget + push por `eval_js(window.rayRender…)`, para shells antiguos y
+  las actualizaciones iniciadas por menús.)
 - **Assets**: **`web.static_embedded(app, "/", "assets")`** sirve la página
   (bundle-safe, con ETag/304/Range); el servidor `web` corre en otra fibra
   (`spawn` + `web.listen_on`) y **solo** sirve estáticos. El puerto se obtiene sin
@@ -178,8 +181,8 @@ adb logcat -s ray                       # stdout/stderr del programa
 ## Características de raylang ejercitadas
 
 paquete `web` 0.2.0 (Tier-2: `listen_on`, `static_embedded`) · `std/ui`
-(ventana, **puente IPC** `window.ray.send`/evento `message`, `eval_js`, `app_menu`,
-`set_about`, `menu`, `save_file`, eventos) · `std/net` ·
+(ventana, **puente IPC** `window.ray.request`/`send` + `as_request`/`reply`,
+`eval_js`, `app_menu`, `set_about`, `menu`, `save_file`, eventos) · `std/net` ·
 `std/kv` (store con guardado atómico) · `std/fs` (`mkdir`, export) ·
 `std/json` · `std/uuid` (`uuid_v7`) · `std/time` · módulos + `pub` ·
 concurrencia (`spawn`) · `struct`/`enum` (uso cross-módulo) · pattern matching ·

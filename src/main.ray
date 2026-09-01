@@ -32,13 +32,14 @@ fn build() -> web.App {
 }
 
 // Pushes the current task list to the page (the page defines window.rayRender).
+// Used for backend-initiated updates (menus) and the fire-and-forget fallback.
 fn push_state(win: int, s: kv.Store) -> unit {
     let json = model.todos_to_json(store.list(s));
     let _e = ui.eval_js(win, "window.rayRender && window.rayRender(${json})");
 }
 
-// Handles one IPC message from the page: {"cmd": "...", ...}. Any command re-renders.
-fn handle_message(win: int, s: kv.Store, msg: string) -> unit {
+// Applies one command {"cmd": "...", ...} to the store.
+fn apply_cmd(s: kv.Store, msg: string) -> unit {
     let cmd = model.field_of(msg, "cmd");
     if (cmd == "add") {
         let title = model.field_of(msg, "title").trim();
@@ -50,7 +51,23 @@ fn handle_message(win: int, s: kv.Store, msg: string) -> unit {
     } else if (cmd == "clear") {
         store.clear_done(s);
     }
-    push_state(win, s);
+}
+
+// Handles one IPC message. `window.ray.request(cmd)` arrives as a request (M157):
+// apply it and RESOLVE its Promise with the updated list via `reply`. A plain
+// `window.ray.send(cmd)` (fallback for older shells) has no id, so we push the
+// state instead.
+fn handle_message(win: int, s: kv.Store, ev: ui.UiEvent) -> unit {
+    match (ui.as_request(ev)) {
+        Option.Some(req) => {
+            apply_cmd(s, req.1);
+            let _r = ui.reply(ev.window, req.0, model.todos_to_json(store.list(s)));
+        },
+        Option.None => {
+            apply_cmd(s, ev.tag);
+            push_state(win, s);
+        },
+    }
 }
 
 // --- Menus (std/ui) ---
@@ -145,7 +162,7 @@ fn main() -> int {
                 } else if (ev.kind == "menu") {
                     on_menu(win, s, ev.tag);
                 } else if (ev.kind == "message") {
-                    handle_message(win, s, ev.tag);
+                    handle_message(win, s, ev);
                 }
             },
             Result.Err(e) => {

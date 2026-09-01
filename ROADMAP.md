@@ -46,6 +46,12 @@ store `kv` y empuja el estado con `eval_js(window.rayRender(…))` — se elimin
 API HTTP (rutas `/api/*`); `web` queda solo sirviendo la página. (Headless se
 prueba inyectando mensajes con `RAY_UI_MSG`.)
 
+Ampliado (M157): **request/reply** — `window.ray.request(cmd)` devuelve una Promise;
+en raylang `ui.as_request(ev) -> Option<(id, body)>` + `ui.reply(window, id, json)`
+la resuelven. RayDesk lo usa como canal principal (cada comando devuelve la lista
+actualizada como respuesta) con fallback a `send`. IPC completo (send + request/reply
++ JSON), idéntico en las 4 plataformas con webview, sin código nativo nuevo.
+
 ### ✅ RESUELTO Y ADOPTADO (web 0.2.0) — 2. Puerto libre para `web.listen`
 
 **`web.listen_on(build, listener)`** (M150) da el split bind/serve. RayDesk

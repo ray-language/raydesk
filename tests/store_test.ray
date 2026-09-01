@@ -1,0 +1,145 @@
+// Tests for the std/kv-backed store and the IPC command dispatch (store.apply).
+// Each test uses its own temp .kv file so nothing touches the real store.
+//
+// Note: these do NOT assume the order of `store.list` — two tasks created in the
+// same millisecond share the uuid_v7 timestamp, so their relative order is not
+// guaranteed (the UI sorts by created_ms, which is enough for human use).
+
+import store;
+import model;
+import std/kv;
+import std/fs;
+
+fn fresh(path: string) -> kv.Store {
+    let _rm = fs.remove_file(path);
+    match (store.open_at(path)) {
+        Result.Ok(s) => s,
+        Result.Err(e) => panic("open_at failed: ${e}"),
+    }
+}
+
+fn has_title(xs: [model.Todo], title: string) -> bool {
+    var found = false;
+    for t in xs {
+        if (t.title == title) { found = true; }
+    }
+    found
+}
+
+fn find_by_id(xs: [model.Todo], id: string) -> Option<model.Todo> {
+    var r: Option<model.Todo> = Option.None;
+    for t in xs {
+        if (t.id == id) { r = Option.Some(t); }
+    }
+    r
+}
+
+@test
+fn add_lists_all() {
+    let s = fresh("/tmp/raydesk_test_add.kv");
+    store.add(s, "uno");
+    store.add(s, "dos");
+    let all = store.list(s);
+    assert_eq(all.len(), 2);
+    assert(has_title(all, "uno"));
+    assert(has_title(all, "dos"));
+    let _rm = fs.remove_file("/tmp/raydesk_test_add.kv");
+}
+
+@test
+fn toggle_flips_done() {
+    let s = fresh("/tmp/raydesk_test_tog.kv");
+    store.add(s, "a");
+    let id = store.list(s)[0].id;
+    store.toggle(s, id);
+    match (find_by_id(store.list(s), id)) {
+        Option.Some(t) => assert_eq(t.done, true),
+        Option.None => panic("task not found after toggle"),
+    }
+    store.toggle(s, id);
+    match (find_by_id(store.list(s), id)) {
+        Option.Some(t) => assert_eq(t.done, false),
+        Option.None => panic("task not found after second toggle"),
+    }
+    let _rm = fs.remove_file("/tmp/raydesk_test_tog.kv");
+}
+
+@test
+fn remove_deletes_only_its_id() {
+    let s = fresh("/tmp/raydesk_test_rm.kv");
+    store.add(s, "a");
+    store.add(s, "b");
+    let victim = store.list(s)[0];
+    store.remove(s, victim.id);
+    let rem = store.list(s);
+    assert_eq(rem.len(), 1);
+    assert(!has_title(rem, victim.title));
+    let _rm = fs.remove_file("/tmp/raydesk_test_rm.kv");
+}
+
+@test
+fn clear_done_keeps_pending() {
+    let s = fresh("/tmp/raydesk_test_clear.kv");
+    store.add(s, "a1");
+    store.add(s, "a2");
+    let done_id = store.list(s)[0].id;
+    store.toggle(s, done_id);
+    store.clear_done(s);
+    let rem = store.list(s);
+    assert_eq(rem.len(), 1);
+    assert(rem[0].id != done_id);
+    let _rm = fs.remove_file("/tmp/raydesk_test_clear.kv");
+}
+
+@test
+fn persists_across_reopen() {
+    let path = "/tmp/raydesk_test_persist.kv";
+    let s = fresh(path);
+    store.add(s, "sobrevive");
+    // Reopen from disk (a fresh handle) and confirm the task is still there.
+    match (store.open_at(path)) {
+        Result.Ok(s2) => {
+            let all = store.list(s2);
+            assert_eq(all.len(), 1);
+            assert_eq(all[0].title, "sobrevive");
+        },
+        Result.Err(e) => panic("reopen failed: ${e}"),
+    }
+    let _rm = fs.remove_file(path);
+}
+
+// --- Command dispatch (store.apply): the IPC {"cmd": …} envelopes ---
+
+@test
+fn apply_add_toggle_delete_clear() {
+    let s = fresh("/tmp/raydesk_test_apply.kv");
+
+    store.apply(s, "{\"cmd\":\"add\",\"title\":\"tarea\"}");
+    assert_eq(store.list(s).len(), 1);
+
+    let id = store.list(s)[0].id;
+    store.apply(s, "{\"cmd\":\"toggle\",\"id\":\"${id}\"}");
+    assert_eq(store.list(s)[0].done, true);
+
+    store.apply(s, "{\"cmd\":\"clear\"}");
+    assert_eq(store.list(s).len(), 0);
+
+    store.apply(s, "{\"cmd\":\"add\",\"title\":\"otra\"}");
+    let id2 = store.list(s)[0].id;
+    store.apply(s, "{\"cmd\":\"delete\",\"id\":\"${id2}\"}");
+    assert_eq(store.list(s).len(), 0);
+
+    let _rm = fs.remove_file("/tmp/raydesk_test_apply.kv");
+}
+
+@test
+fn apply_ignores_blank_title_and_unknown_cmd() {
+    let s = fresh("/tmp/raydesk_test_apply2.kv");
+    store.apply(s, "{\"cmd\":\"add\",\"title\":\"   \"}");   // blank -> ignored
+    assert_eq(store.list(s).len(), 0);
+    store.apply(s, "{\"cmd\":\"nope\"}");                     // unknown -> no-op
+    assert_eq(store.list(s).len(), 0);
+    store.apply(s, "garbage");                                 // not JSON -> no-op
+    assert_eq(store.list(s).len(), 0);
+    let _rm = fs.remove_file("/tmp/raydesk_test_apply2.kv");
+}

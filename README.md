@@ -66,12 +66,15 @@ pruebas de las características del lenguaje.
 
 ```
 src/
-├── model.ray   # Todo + JSON (una tarea <-> objeto; lista para la API) + @test
-├── store.ray   # repositorio sobre std/kv (list/add/toggle/remove/clear_done)
+├── model.ray   # Todo + JSON (una tarea <-> objeto; lista para la API)
+├── store.ray   # repositorio std/kv (list/add/toggle/remove/clear_done) + apply(cmd)
 └── main.ray    # web static + IPC (window.ray → std/kv) + std/ui event loop
+tests/
+├── model_test.ray  # (de)serialización y field_of
+└── store_test.ray  # CRUD del store + dispatch de comandos (store.apply)
 assets/
 ├── index.html  # utilidades Tailwind
-├── app.js      # frontend: IPC (window.ray.send / window.rayRender) + Tailwind
+├── app.js      # frontend: IPC (window.ray.request/send + rayRender) + Tailwind
 └── app.css     # GENERADO por Tailwind (purgado) — no editar a mano
 tailwind/
 ├── tailwind.config.js  # content: index.html + app.js
@@ -96,7 +99,7 @@ raydesk-android/        # shell Android (Gradle) generado por `ray bundle --andr
 ray add web@^0.2.0      # (ya en ray.toml) descarga web + net del registro
 ray run                 # abre la ventana (dev: assets en vivo desde disco)
 ray dev                 # igual, con recarga al guardar cambios
-ray test                # corre los @test del proyecto (4 tests en model)
+ray test                # corre los @test de tests/ (13: model + store)
 ray build --native --release
 ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .desktop
 ```

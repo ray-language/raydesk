@@ -1,0 +1,65 @@
+// Tests for the pure model layer (JSON (de)serialization + field extraction).
+// Run with `ray test` (this file is picked up as an integration suite).
+
+import model;
+
+@test
+fn todo_json_roundtrip() {
+    let t = model.Todo { id: "01x", title: "café ☕", done: true, created_ms: 42 };
+    match (model.todo_from_json_str(model.todo_to_json_str(t))) {
+        Option.Some(u) => {
+            assert_eq(u.id, "01x");
+            assert_eq(u.title, "café ☕");
+            assert_eq(u.done, true);
+            assert_eq(u.created_ms, 42);
+        },
+        Option.None => panic("should parse"),
+    }
+}
+
+@test
+fn bad_json_is_none() {
+    match (model.todo_from_json_str("not json")) {
+        Option.Some(_t) => panic("should be None"),
+        Option.None => {},
+    }
+    match (model.todo_from_json_str("[1,2,3]")) {
+        Option.Some(_t) => panic("array is not a todo object"),
+        Option.None => {},
+    }
+}
+
+@test
+fn list_json() {
+    let ts = [
+        model.Todo { id: "a", title: "x", done: false, created_ms: 1 },
+        model.Todo { id: "b", title: "y", done: true, created_ms: 2 },
+    ];
+    let s = model.todos_to_json(ts);
+    assert(s.contains("\"id\":\"a\""));
+    assert(s.contains("\"done\":true"));
+}
+
+@test
+fn empty_list_json() {
+    let empty: [model.Todo] = [];
+    assert_eq(model.todos_to_json(empty), "[]");
+}
+
+@test
+fn field_extraction() {
+    assert_eq(model.field_of("{\"title\":\"hola\"}", "title"), "hola");
+    assert_eq(model.field_of("{\"id\":\"x1\"}", "id"), "x1");
+    assert_eq(model.field_of("not json", "title"), "");
+    assert_eq(model.field_of("{\"title\":\"hola\"}", "missing"), "");
+}
+
+@test
+fn title_with_special_chars_roundtrips() {
+    // Quotes/backslashes/newlines must survive the JSON round-trip.
+    let t = model.Todo { id: "z", title: "a\"b\\c\nd", done: false, created_ms: 7 };
+    match (model.todo_from_json_str(model.todo_to_json_str(t))) {
+        Option.Some(u) => assert_eq(u.title, "a\"b\\c\nd"),
+        Option.None => panic("should parse"),
+    }
+}

@@ -1,6 +1,7 @@
 // Persistence, backed by std/kv — a key/value store with atomic saves
 // (temp + rename), one KEY PER TASK (the task id, a time-ordered uuid_v7, so
-// `keys()` comes back in creation order).
+// `keys()` comes back roughly in creation order — at millisecond granularity;
+// the UI sorts by created_ms).
 //
 // The store is opened ONCE (see `open`) and owned by the UI event-loop fiber,
 // which is the only fiber that touches it — so there is no per-request reopen and
@@ -28,9 +29,14 @@ fn store_path() -> string {
     "${base_dir()}/tasks.kv"
 }
 
+// Opens the store at an explicit path (used by tests with a temp file).
+pub fn open_at(path: string) -> Result<kv.Store, string> {
+    kv.open(path)
+}
+
 pub fn open() -> Result<kv.Store, string> {
     let _dir = fs.mkdir(base_dir());
-    kv.open(store_path())
+    open_at(store_path())
 }
 
 fn commit(s: kv.Store) -> unit {
@@ -102,4 +108,20 @@ pub fn clear_done(s: kv.Store) -> unit {
         }
     }
     commit(s);
+}
+
+// Applies one command envelope {"cmd": "...", ...} to the store. Central place for
+// the IPC command dispatch, so it can be unit-tested without the UI.
+pub fn apply(s: kv.Store, msg: string) -> unit {
+    let cmd = model.field_of(msg, "cmd");
+    if (cmd == "add") {
+        let title = model.field_of(msg, "title").trim();
+        if (title.len() > 0) { add(s, title); }
+    } else if (cmd == "toggle") {
+        toggle(s, model.field_of(msg, "id"));
+    } else if (cmd == "delete") {
+        remove(s, model.field_of(msg, "id"));
+    } else if (cmd == "clear") {
+        clear_done(s);
+    }
 }

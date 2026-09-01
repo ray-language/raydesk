@@ -37,9 +37,10 @@ de pruebas de las características del lenguaje.
   tareas… ⌘E, Recargar ⌘R) y "Tarea" (Limpiar completadas ⌘K) con `ui.menu`. El
   click llega como evento `"menu"` con `tag`; las acciones manejan el frontend vía
   `ui.eval_js` (reusan los handlers de la página, así la UI queda sincronizada),
-  "Exportar" abre el diálogo nativo `ui.save_file`, y "Acerca de RayDesk" abre un
-  modal informativo (versión, creador). Los menús estándar App/Edit (⌘Q,
-  portapapeles, undo) se instalan solos.
+  "Exportar" abre el diálogo nativo `ui.save_file`, y "Acerca de RayDesk" usa el
+  **panel About nativo** de macOS (`tag: "role:about"`); en Linux (sin panel
+  nativo) abre un modal informativo en la webview. Los menús estándar App/Edit
+  (⌘Q, portapapeles, undo) se instalan solos.
 - **Persistencia**: `std/kv` con **una clave por tarea** (la clave es el `id`, un
   `uuid_v7` ordenable por tiempo, así `keys()` viene en orden de creación) y
   **guardado atómico** (temp + rename). Es la única fuente de verdad; los handlers

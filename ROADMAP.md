@@ -156,10 +156,9 @@ raylang añadió **`ui.app_menu(name, [MenuItem])`** — justo lo que se pedía:
 - en Linux no hay menú de app global: los items van a un menú por-ventana titulado
   `name` y todos (incluido `role:about`) emiten `"menu"`.
 
-RayDesk ahora hace `ui.app_menu("RayDesk", [MenuItem{tag:"about", …}])` con un tag
-normal, así "Acerca de RayDesk" queda en el menú de app (ubicación nativa) y abre
-**nuestro modal** (versión/creador), consistente en macOS y Linux. (Con
-`"role:about"` saldría el panel nativo, pero sin evento no mostraría el modal.)
+RayDesk hace `ui.app_menu("RayDesk", [MenuItem{tag:"role:about", …}])`: en macOS
+"Acerca de RayDesk" abre el **panel About nativo** del sistema; en Linux (sin panel
+nativo) emite el evento y cae en nuestro modal en la webview (versión/creador).
 
 ---
 

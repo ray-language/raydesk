@@ -1,9 +1,10 @@
 # RayDesk
 
-Un gestor de tareas de **escritorio** escrito en [raylang](https://raylang.dev)
-(probado con **1.4.0**). Ventana nativa (webview del sistema) + backend HTTP
-local sobre el framework `web` + persistencia con `std/kv`. Pensado como banco
-de pruebas de las características del lenguaje.
+Un gestor de tareas de **escritorio e iOS** escrito en
+[raylang](https://raylang.dev) (probado con **1.4.0**). Ventana nativa (webview
+del sistema) + backend HTTP local sobre el framework `web` + persistencia con
+`std/kv`. El **mismo programa raylang** corre en macOS, Linux e iOS. Pensado como
+banco de pruebas de las características del lenguaje.
 
 ## Arquitectura
 
@@ -73,6 +74,12 @@ tailwind/
 ├── tailwind.config.js  # content: index.html + app.js
 ├── input.css           # @tailwind base/components/utilities
 └── build.sh            # regenera assets/app.css
+raydesk-ios/            # shell iOS (Xcode) generado por `ray bundle --ios`
+├── Shell/              # AppDelegate + SceneDelegate (UIScene) en Objective-C
+├── App.xcconfig        # build settings + firma (DEVELOPMENT_TEAM)
+├── raydesk.xcodeproj/
+├── libs/ · libs-sim/   # staticlib del programa (regenerable, gitignored)
+└── rebuild.sh          # ray bundle --ios + re-aplica la firma
 ```
 
 ## Ejecutar
@@ -93,6 +100,43 @@ ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .deskt
 > se confirmó que las tareas **persisten** en el store `kv` (altas, toggle y
 > clear-done sobreviven), con UTF-8, y `..` → 404. La ventana real se abre en tu
 > máquina con `ray run`.
+
+## iOS
+
+El **mismo `src/`** corre en iOS: `ray bundle --ios` compila el programa raylang a
+un **staticlib** y genera un shell Xcode en `raydesk-ios/`. Dentro de la app, el
+programa arranca su webserver embebido en `127.0.0.1` y `ui.open(title, url)` carga
+esa URL en un `WKWebView` — el mismo frontend (`assets/`) y la misma API que en
+escritorio. Los eventos de ciclo de vida llegan por `ui.next_event()` como
+`kind="lifecycle"`, `tag="background"`/`"foreground"`.
+
+- **Persistencia**: en iOS la raíz del contenedor de la app no es escribible, por
+  eso el store `kv` vive en `~/Documents/RayDesk/tasks.kv` (escribible y persiste
+  entre lanzamientos). Ver `src/store.ray`.
+- **UI**: `raydesk-ios/Shell` usa el ciclo de vida **UIScene** (`SceneDelegate`
+  aloja el `WKWebView` y conecta los handlers de `std/ui`).
+
+### Compilar y ejecutar
+
+```sh
+# Regenera el staticlib + proyecto Xcode y re-aplica la firma en cada build
+raydesk-ios/rebuild.sh
+# (equivale a `ray bundle --ios`, que además borra la firma — ver ROADMAP #9)
+
+# Simulador (sin firma):
+xcodebuild -project raydesk-ios/raydesk.xcodeproj -target raydesk \
+  -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO
+# luego: xcrun simctl boot <device> && install && launch
+
+# Dispositivo: abre raydesk-ios/raydesk.xcodeproj en Xcode y compila.
+```
+
+- **Firma**: el `DEVELOPMENT_TEAM` se fija en `raydesk-ios/App.xcconfig`. Como
+  `ray bundle --ios` regenera ese archivo, usa **`raydesk-ios/rebuild.sh`** (o
+  `RAY_IOS_TEAM=XXXXXXXXXX raydesk-ios/rebuild.sh`) para re-aplicarlo tras cada
+  build. Detalle en [`ROADMAP.md`](ROADMAP.md) #9.
+- Los `libs/`/`libs-sim/` (staticlibs, ~15 MB) están **gitignored**: se regeneran
+  con el comando de arriba.
 
 ## Características de raylang ejercitadas
 

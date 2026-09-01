@@ -72,11 +72,16 @@ fn build() -> web.App {
 // install themselves. On Linux the menu bar is per-window, so register BEFORE
 // opening the window.
 fn install_menus() -> unit {
-    // "Acerca de RayDesk" — std/ui can't inject into the macOS app menu (no API
-    // for the auto-installed one), so the About item lives at the top of our
-    // first custom menu and opens an in-app modal via the webview.
-    let _f = ui.menu("Archivo", [
+    // "Acerca de RayDesk" in the APPLICATION menu (macOS: the bold first menu,
+    // above Hide/Quit). Passing the name also retitles it to "RayDesk" even under
+    // `ray run` (where it would show the process name "ray"). A normal tag emits a
+    // "menu" event, so About opens our own modal — consistent on macOS and Linux.
+    // (Use tag "role:about" instead to get the native macOS about panel, but that
+    // fires no event, so it wouldn't show our modal.)
+    let _a = ui.app_menu("RayDesk", [
         ui.MenuItem { tag: "about", title: "Acerca de RayDesk", shortcut: "" },
+    ]);
+    let _f = ui.menu("Archivo", [
         ui.MenuItem { tag: "new", title: "Nueva tarea", shortcut: "N" },
         ui.MenuItem { tag: "export", title: "Exportar tareas…", shortcut: "E" },
         ui.MenuItem { tag: "reload", title: "Recargar", shortcut: "R" },

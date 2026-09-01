@@ -72,13 +72,21 @@ fn build() -> web.App {
 // install themselves. On Linux the menu bar is per-window, so register BEFORE
 // opening the window.
 fn install_menus() -> unit {
+    // Fill the native macOS "About" panel (name / version / description /
+    // copyright) — opened by the "role:about" item below.
+    let _s = ui.set_about(
+        "RayDesk",
+        "0.1.0",
+        "Gestor de tareas de escritorio e iOS",
+        "© 2026 Rayala · Hecho con raylang"
+    );
     // "Acerca de RayDesk" in the APPLICATION menu (macOS: the bold first menu,
-    // above Hide/Quit). Passing the name also retitles it to "RayDesk" even under
-    // `ray run` (where it would show the process name "ray"). A normal tag emits a
-    // "menu" event, so About opens our own info-rich modal (the native "role:about"
-    // panel is fixed to name/version and can't carry the extra fields we want).
+    // above Hide/Quit). `name` also retitles it to "RayDesk" even under `ray run`
+    // (where it would show the process name "ray"). Tag "role:about" opens the
+    // native About panel on macOS (no event); on Linux it emits a "menu" event and
+    // we fall back to the in-app modal (see `on_menu`).
     let _a = ui.app_menu("RayDesk", [
-        ui.MenuItem { tag: "about", title: "Acerca de RayDesk", shortcut: "" },
+        ui.MenuItem { tag: "role:about", title: "Acerca de RayDesk", shortcut: "" },
     ]);
     let _f = ui.menu("Archivo", [
         ui.MenuItem { tag: "new", title: "Nueva tarea", shortcut: "N" },
@@ -107,7 +115,8 @@ fn export_tasks() -> unit {
 }
 
 fn on_menu(win: int, tag: string) -> unit {
-    if (tag == "about") {
+    if (tag == "role:about") {
+        // Reached only on Linux (macOS opens the native About panel, no event).
         let _e = ui.eval_js(win, "window.rayShowAbout && window.rayShowAbout();");
     } else if (tag == "new") {
         let _e = ui.eval_js(win, "var e=document.getElementById('title'); if(e){e.focus();}");

@@ -3,17 +3,27 @@
 
     /* Colors — macOS-like neutral palette (Apple grays) */
     --bg: #f5f5f7;
-    --panel: #ffffff;
     --ink: #1d1d1f;
     --muted: #86868b;
-    --border: #d2d2d7;
     --accent: #007aff;          /* fallback macOS system blue */
     --accent-ink: #ffffff;
     --danger: #ff3b30;          /* Apple systemRed */
     --done: #aeaeb2;            /* Apple systemGray */
-    --overlay-bg: rgba(0, 0, 0, 0.4);
-    --shadow-modal: 0 1.25rem 3.75rem rgba(0, 0, 0, 0.28);
-    --btn-shadow: 0 0.0625rem 0.0625rem rgba(0, 0, 0, 0.12);
+    --overlay-bg: rgba(0, 0, 0, 0.22);
+
+    /* Liquid Glass materials */
+    --glass-fill: rgba(255, 255, 255, 0.55);
+    --glass-fill-strong: rgba(255, 255, 255, 0.72);
+    --glass-border: rgba(255, 255, 255, 0.7);
+    --glass-highlight: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.85);
+    --glass-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.16);
+    --glass-blur: blur(1.25rem) saturate(180%);
+    --overlay-blur: blur(0.75rem);
+
+    /* Accent button (glassy tint of the system accent) */
+    --btn-fill: color-mix(in srgb, var(--accent) 90%, transparent);
+    --btn-highlight: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.4);
+    --btn-shadow: 0 0.125rem 0.5rem color-mix(in srgb, var(--accent) 35%, transparent);
     --focus-ring: 0 0 0 0.1875rem color-mix(in srgb, var(--accent) 35%, transparent);
 
     /* Typography */
@@ -46,14 +56,14 @@
     --space-64: 4rem;
 
     /* Control paddings (em → each scales with its own control's font-size) */
-    --input-pad: 0.8em 0.9333em;       /* input, fs 15px → 12/14 */
-    --btn-pad: 0.4em 1.3333em;         /* primary buttons, fs 15px → 6/20 */
+    --input-pad: 0.5714em 0.8571em; /* input, fs 14px → 8/12 */
+    --btn-pad: 0.3846em 1.0769em;   /* primary buttons, fs 13px → 5/14 (compact) */
     --icon-btn-pad: 0.1111em 0.3333em; /* icon button, fs 18px → 2/6 */
 
-    /* Radii — macOS: small on controls, rounder on sheets */
-    --radius-6: 0.375rem;
+    /* Radii — macOS: capsule buttons, rounded glass sheets */
     --radius-8: 0.5rem;
-    --radius-12: 0.75rem;
+    --radius-16: 1rem;
+    --radius-pill: 62.5rem;
 
     /* Sizes */
     --app-max-width: 40rem;
@@ -73,23 +83,25 @@
 @media (prefers-color-scheme: dark) {
     :root {
         --bg: #1e1e1e;
-        --panel: #2c2c2e;
         --ink: #f5f5f7;
         --muted: #98989d;
-        --border: #3a3a3c;
         --accent: #0a84ff;      /* fallback macOS dark system blue */
         --done: #6c6c70;
+        --overlay-bg: rgba(0, 0, 0, 0.45);
+
+        --glass-fill: rgba(44, 44, 46, 0.5);
+        --glass-fill-strong: rgba(44, 44, 46, 0.68);
+        --glass-border: rgba(255, 255, 255, 0.14);
+        --glass-highlight: inset 0 0.0625rem 0 rgba(255, 255, 255, 0.16);
+        --glass-shadow: 0 0.75rem 2.5rem rgba(0, 0, 0, 0.55);
     }
 }
 
 /* Use the user's real macOS accent color where WebKit supports it (kept last so
-   it wins in both light and dark). Keep the label WHITE (`--accent-ink`): the
-   `AccentColorText` system color isn't reliably supported in the webview and fell
-   back to black, and macOS accent buttons use white labels anyway. */
+   it wins in both light and dark). Label stays white (--accent-ink): the
+   AccentColorText system color isn't reliably supported in the webview. */
 @supports (color: AccentColor) {
-    :root {
-        --accent: AccentColor;
-    }
+    :root { --accent: AccentColor; }
 }
 
 * { box-sizing: border-box; }
@@ -128,44 +140,49 @@ body {
 .new-task input {
     flex: 1;
     padding: var(--input-pad);
-    font-size: var(--fs-15);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-6);
-    background: var(--panel);
+    font-size: var(--fs-14);
+    border: var(--border-width) solid var(--glass-border);
+    border-radius: var(--radius-8);
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-highlight);
     color: var(--ink);
 }
 
 .new-task input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: var(--focus-ring);
+    box-shadow: var(--glass-highlight), var(--focus-ring);
 }
 
-/* Primary (default) push buttons — macOS accent-filled */
+/* Primary buttons — compact macOS capsules with a liquid-glass accent fill */
 .new-task button,
 .about button {
     padding: var(--btn-pad);
-    font-size: var(--fs-15);
+    font-size: var(--fs-13);
     font-weight: var(--fw-medium);
     border: none;
-    border-radius: var(--radius-6);
-    background: var(--accent);
+    border-radius: var(--radius-pill);
+    background: var(--btn-fill);
     color: var(--accent-ink);
-    box-shadow: var(--btn-shadow);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--btn-highlight), var(--btn-shadow);
     cursor: pointer;
     transition: filter var(--transition-fast);
 }
 
 .new-task button:hover,
-.about button:hover { filter: brightness(1.05); }
+.about button:hover { filter: brightness(1.06); }
 
 .new-task button:active,
-.about button:active { filter: brightness(0.92); }
+.about button:active { filter: brightness(0.94); }
 
 .new-task button:focus-visible,
 .about button:focus-visible {
     outline: none;
-    box-shadow: var(--btn-shadow), var(--focus-ring);
+    box-shadow: var(--btn-highlight), var(--btn-shadow), var(--focus-ring);
 }
 
 .stats {
@@ -203,9 +220,12 @@ body {
     align-items: center;
     gap: var(--space-12);
     padding: var(--space-12) var(--space-14);
-    background: var(--panel);
-    border: var(--border-width) solid var(--border);
+    background: var(--glass-fill);
+    border: var(--border-width) solid var(--glass-border);
     border-radius: var(--radius-8);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-highlight);
 }
 
 .item input[type="checkbox"] {
@@ -234,7 +254,7 @@ body {
     line-height: var(--lh-solid);
     cursor: pointer;
     padding: var(--icon-btn-pad);
-    border-radius: var(--radius-6);
+    border-radius: var(--radius-pill);
     transition: color var(--transition-fast);
 }
 
@@ -247,12 +267,14 @@ body {
     margin-top: var(--space-32);
 }
 
-/* About modal */
+/* About modal — a frosted liquid-glass sheet that blurs the app behind it */
 .overlay {
     display: none;
     position: fixed;
     inset: 0;
     background: var(--overlay-bg);
+    -webkit-backdrop-filter: var(--overlay-blur);
+    backdrop-filter: var(--overlay-blur);
     align-items: center;
     justify-content: center;
     padding: var(--space-24);
@@ -264,14 +286,16 @@ body {
 }
 
 .about {
-    background: var(--panel);
-    border: var(--border-width) solid var(--border);
-    border-radius: var(--radius-12);
+    background: var(--glass-fill-strong);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: var(--border-width) solid var(--glass-border);
+    border-radius: var(--radius-16);
     padding: var(--space-28) var(--space-28) var(--space-22);
     width: var(--modal-width);
     max-width: 100%;
     text-align: center;
-    box-shadow: var(--shadow-modal);
+    box-shadow: var(--glass-highlight), var(--glass-shadow);
 }
 
 .about h2 {
@@ -297,7 +321,7 @@ body {
     align-items: baseline;
     gap: var(--space-16);
     padding: var(--space-7) 0;
-    border-top: var(--border-width) solid var(--border);
+    border-top: var(--border-width) solid var(--glass-border);
     font-size: var(--fs-13);
 }
 

@@ -59,7 +59,7 @@ fn install_menus() -> unit {
     let _s = ui.set_about(
         "RayDesk",
         "0.1.0",
-        "Gestor de tareas de escritorio e iOS",
+        "Gestor de tareas de escritorio y móvil",
         "© 2026 Rayala · Hecho con raylang"
     );
     let _a = ui.app_menu("RayDesk", [

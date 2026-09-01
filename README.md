@@ -1,10 +1,10 @@
 # RayDesk
 
-Un gestor de tareas de **escritorio e iOS** escrito en
-[raylang](https://raylang.dev) (probado con **1.4.0**). Ventana nativa (webview
-del sistema) + backend HTTP local sobre el framework `web` + persistencia con
-`std/kv`. El **mismo programa raylang** corre en macOS, Linux e iOS. Pensado como
-banco de pruebas de las características del lenguaje.
+Un gestor de tareas de **escritorio, iOS y Android** escrito en
+[raylang](https://raylang.dev) (probado con **1.4.0**). Ventana/webview del
+sistema + puente IPC de `std/ui` + persistencia con `std/kv`. El **mismo programa
+raylang** (`src/`) corre en macOS, Linux, iOS y Android. Pensado como banco de
+pruebas de las características del lenguaje.
 
 ## Arquitectura
 
@@ -80,6 +80,11 @@ raydesk-ios/            # shell iOS (Xcode) generado por `ray bundle --ios`
 ├── raydesk.xcodeproj/
 ├── libs/ · libs-sim/   # staticlib del programa (regenerable, gitignored)
 └── rebuild.sh          # ray bundle --ios + re-aplica la firma
+raydesk-android/        # shell Android (Gradle) generado por `ray bundle --android`
+├── app/src/main/       # MainActivity + RayBridge (Java), Manifest, res/
+│   └── jniLibs/<abi>/  # libray_app.so (cdylib del programa; regenerable, gitignored)
+├── app/build.gradle · settings.gradle · gradle.properties
+└── README.md           # compilar/instalar el APK
 ```
 
 ## Ejecutar
@@ -136,6 +141,39 @@ xcodebuild -project raydesk-ios/raydesk.xcodeproj -target raydesk \
   build. Detalle en [`ROADMAP.md`](ROADMAP.md) #9.
 - Los `libs/`/`libs-sim/` (staticlibs, ~15 MB) están **gitignored**: se regeneran
   con el comando de arriba.
+
+## Android
+
+El **mismo `src/`** corre en Android: `ray bundle --android` compila el programa
+raylang a un **cdylib** (`libray_app.so`) y genera un shell Gradle en
+`raydesk-android/`. La `MainActivity` (Java) aloja un `WebView`, arranca el
+programa (que sirve la UI en `127.0.0.1`) y expone el mismo **puente IPC** que
+escritorio/iOS: `window.ray.send(text)` → evento `"message"` (`RayBridge`); los
+eventos `lifecycle` llegan en `onPause`/`onResume`. stdout/stderr van a **logcat**
+con tag `ray`.
+
+- **Persistencia**: `std/kv`/`std/fs` escriben en el directorio privado de la app
+  (scoped storage; el cwd no es escribible).
+- **Red**: `network_security_config.xml` permite cleartext a `127.0.0.1`/`localhost`
+  (el webserver embebido).
+
+### Compilar y ejecutar
+
+```sh
+ray bundle --android                    # genera el shell + libray_app.so
+#   --android-abi arm64|x86_64|all      # construye un ABI (conserva el otro .so)
+
+cd raydesk-android
+gradle assembleDebug                    # requiere Android SDK + JDK 17+
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb logcat -s ray                       # stdout/stderr del programa
+```
+
+- **ABI**: el `app/build.gradle` fija `arm64-v8a`; para el **emulador x86_64** usa
+  `ray bundle --android --android-abi all` (si no: `INSTALL_FAILED_NO_MATCHING_ABIS`).
+- **`local.properties`** (ruta del SDK) y todo lo de build (`.gradle/`, `build/`,
+  el APK y `libray_app.so`) están **gitignored** — se regeneran. Detalles en
+  [`raydesk-android/README.md`](raydesk-android/README.md).
 
 ## Características de raylang ejercitadas
 

@@ -208,18 +208,29 @@ body {
 .about-meta > div {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
     padding: 7px 0;
     border-top: 1px solid var(--border);
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .about-meta dt {
     color: var(--muted);
+    white-space: nowrap;
 }
 
 .about-meta dd {
     margin: 0;
     font-weight: 600;
+    text-align: right;
+    word-break: break-word;
+}
+
+.about-copy {
+    margin: 16px 0 20px;
+    color: var(--muted);
+    font-size: 12px;
 }
 
 .about button {

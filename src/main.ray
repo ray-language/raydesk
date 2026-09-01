@@ -74,12 +74,11 @@ fn build() -> web.App {
 fn install_menus() -> unit {
     // "Acerca de RayDesk" in the APPLICATION menu (macOS: the bold first menu,
     // above Hide/Quit). Passing the name also retitles it to "RayDesk" even under
-    // `ray run` (where it would show the process name "ray"). Tag "role:about"
-    // wires it to the NATIVE macOS about panel (fires no event there). On Linux
-    // there is no native panel, so it emits a "menu" event with tag "role:about"
-    // and we fall back to our in-app modal (handled in `on_menu`).
+    // `ray run` (where it would show the process name "ray"). A normal tag emits a
+    // "menu" event, so About opens our own info-rich modal (the native "role:about"
+    // panel is fixed to name/version and can't carry the extra fields we want).
     let _a = ui.app_menu("RayDesk", [
-        ui.MenuItem { tag: "role:about", title: "Acerca de RayDesk", shortcut: "" },
+        ui.MenuItem { tag: "about", title: "Acerca de RayDesk", shortcut: "" },
     ]);
     let _f = ui.menu("Archivo", [
         ui.MenuItem { tag: "new", title: "Nueva tarea", shortcut: "N" },
@@ -108,8 +107,7 @@ fn export_tasks() -> unit {
 }
 
 fn on_menu(win: int, tag: string) -> unit {
-    if (tag == "role:about") {
-        // Only reached on Linux (macOS shows the native about panel, no event).
+    if (tag == "about") {
         let _e = ui.eval_js(win, "window.rayShowAbout && window.rayShowAbout();");
     } else if (tag == "new") {
         let _e = ui.eval_js(win, "var e=document.getElementById('title'); if(e){e.focus();}");

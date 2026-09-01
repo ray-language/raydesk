@@ -6,43 +6,69 @@
     <title>RayDesk</title>
     <link rel="stylesheet" href="/app.css">
 </head>
-<body>
-    <main class="app">
-        <header class="topbar">
-            <h1>RayDesk</h1>
-            <p class="subtitle">Tareas de escritorio e iOS · raylang</p>
+<body class="min-h-screen bg-slate-50 text-slate-900 antialiased dark:bg-neutral-950 dark:text-slate-100">
+    <main class="mx-auto max-w-xl px-6 pb-16 pt-8">
+        <header>
+            <h1 class="text-3xl font-bold tracking-tight">RayDesk</h1>
+            <p class="mb-6 mt-1 text-sm text-slate-500 dark:text-slate-400">Tareas de escritorio e iOS · raylang</p>
         </header>
 
-        <form id="new-task" class="new-task" autocomplete="off">
-            <input id="title" type="text" placeholder="Nueva tarea…" maxlength="200" required>
-            <button type="submit">Añadir</button>
+        <form id="new-task" class="mb-5 flex gap-2" autocomplete="off">
+            <input id="title" type="text" placeholder="Nueva tarea…" maxlength="200" required
+                class="flex-1 rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/40 dark:border-neutral-700 dark:bg-neutral-900 dark:placeholder:text-neutral-500">
+            <button type="submit"
+                class="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-500 active:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50">Añadir</button>
         </form>
 
-        <section class="stats">
+        <section class="mb-3 flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
             <span id="stat-total">0 tareas</span>
             <span id="stat-done">0 completadas</span>
-            <button id="clear-done" class="link" type="button">Limpiar completadas</button>
+            <button id="clear-done" type="button"
+                class="ml-auto text-blue-600 transition-colors hover:underline dark:text-blue-400">Limpiar completadas</button>
         </section>
 
-        <ul id="list" class="list"></ul>
+        <ul id="list" class="flex flex-col gap-2"></ul>
 
-        <p id="empty" class="empty" hidden>No hay tareas todavía. Añade la primera arriba.</p>
+        <p id="empty" class="mt-8 text-center text-sm text-slate-500 dark:text-slate-400" hidden>
+            No hay tareas todavía. Añade la primera arriba.
+        </p>
     </main>
 
-    <div id="about-overlay" class="overlay">
-        <div class="about" role="dialog" aria-modal="true" aria-labelledby="about-title">
-            <h2 id="about-title">RayDesk</h2>
-            <p class="about-tagline">Gestor de tareas de escritorio e iOS</p>
-            <dl class="about-meta">
-                <div><dt>Versión</dt><dd>0.1.0</dd></div>
-                <div><dt>Escrito en</dt><dd>raylang 1.4.0</dd></div>
-                <div><dt>Stack</dt><dd>web · std/ui · std/kv</dd></div>
-                <div><dt>Persistencia</dt><dd>~/Documents/RayDesk</dd></div>
-                <div><dt>Plataformas</dt><dd>macOS · Linux · iOS</dd></div>
-                <div><dt>Creador</dt><dd>Rayala</dd></div>
+    <div id="about-overlay"
+        class="fixed inset-0 z-10 hidden items-center justify-center bg-black/40 p-6">
+        <div role="dialog" aria-modal="true" aria-labelledby="about-title"
+            class="w-80 max-w-full rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-2xl dark:border-neutral-800 dark:bg-neutral-900">
+            <h2 id="about-title" class="text-2xl font-bold tracking-tight">RayDesk</h2>
+            <p class="mb-5 mt-1.5 text-xs text-slate-500 dark:text-slate-400">Gestor de tareas de escritorio e iOS</p>
+            <dl class="mb-5 text-left text-xs">
+                <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 py-1.5 dark:border-neutral-800">
+                    <dt class="whitespace-nowrap text-slate-500 dark:text-slate-400">Versión</dt>
+                    <dd class="break-words text-right font-semibold">0.1.0</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 py-1.5 dark:border-neutral-800">
+                    <dt class="whitespace-nowrap text-slate-500 dark:text-slate-400">Escrito en</dt>
+                    <dd class="break-words text-right font-semibold">raylang 1.4.0</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 py-1.5 dark:border-neutral-800">
+                    <dt class="whitespace-nowrap text-slate-500 dark:text-slate-400">Stack</dt>
+                    <dd class="break-words text-right font-semibold">web · std/ui · std/kv</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 py-1.5 dark:border-neutral-800">
+                    <dt class="whitespace-nowrap text-slate-500 dark:text-slate-400">Persistencia</dt>
+                    <dd class="break-words text-right font-semibold">~/Documents/RayDesk</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 py-1.5 dark:border-neutral-800">
+                    <dt class="whitespace-nowrap text-slate-500 dark:text-slate-400">Plataformas</dt>
+                    <dd class="break-words text-right font-semibold">macOS · Linux · iOS</dd>
+                </div>
+                <div class="flex items-baseline justify-between gap-4 border-t border-slate-200 py-1.5 dark:border-neutral-800">
+                    <dt class="whitespace-nowrap text-slate-500 dark:text-slate-400">Creador</dt>
+                    <dd class="break-words text-right font-semibold">Rayala</dd>
+                </div>
             </dl>
-            <p class="about-copy">© 2026 Rayala · Hecho con raylang</p>
-            <button id="about-close" type="button">Cerrar</button>
+            <p class="mb-5 text-[0.7rem] text-slate-400 dark:text-neutral-500">© 2026 Rayala · Hecho con raylang</p>
+            <button id="about-close" type="button"
+                class="rounded-lg bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-500 active:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50">Cerrar</button>
         </div>
     </div>
 

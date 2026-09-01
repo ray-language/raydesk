@@ -31,11 +31,13 @@ de pruebas de las características del lenguaje.
   hornea en el binario (una `.app` arranca con `cwd=/`).
 - **Verbos**: los mounts de estáticos sirven GET/HEAD antes que las rutas, así que
   la API va como **POST** (incluida la lectura `/api/list`).
-- **Look**: estética macOS "Liquid Glass" — superficies translúcidas con
-  `backdrop-filter` (blur + saturación) y reflejo especular, botones compactos en
-  capsule, color de acento del **sistema** (`AccentColor`) y focus-ring azul. Todo
-  parametrizado con design tokens en `:root` (colores, materiales glass,
-  espaciados en `rem`, paddings de control en `em`).
+- **Look**: UI moderna con **Tailwind CSS** (build purgado: `assets/app.css` solo
+  contiene las clases realmente usadas en `index.html`/`app.js`, ~12 KB
+  minificado). Botones azules con estados hover/active/focus-ring, tarjetas
+  redondeadas con sombra, modo oscuro por `prefers-color-scheme` (variantes
+  `dark:`). Regenerar tras tocar clases: `tailwind/build.sh` (o `ray dev` para el
+  raylang; el CSS se rehace con el script). Fuentes en `tailwind/` (config +
+  input); la salida `assets/app.css` va embebida.
 - **Menús** (`std/ui`): "Acerca de RayDesk" va en el **menú de app** (macOS: el
   primero, en negrita) vía `ui.app_menu`, que además lo retitula a "RayDesk"
   incluso bajo `ray run`. Más menús custom "Archivo" (Nueva tarea ⌘N, Exportar
@@ -63,6 +65,14 @@ src/
 ├── model.ray   # Todo + JSON (una tarea <-> objeto; lista para la API) + @test
 ├── store.ray   # repositorio sobre std/kv (list/add/toggle/remove/clear_done)
 └── main.ray    # app web (rutas + static_embedded), ventana std/ui + event loop
+assets/
+├── index.html  # utilidades Tailwind
+├── app.js      # frontend (clases Tailwind literales para el purge)
+└── app.css     # GENERADO por Tailwind (purgado) — no editar a mano
+tailwind/
+├── tailwind.config.js  # content: index.html + app.js
+├── input.css           # @tailwind base/components/utilities
+└── build.sh            # regenera assets/app.css
 ```
 
 ## Ejecutar

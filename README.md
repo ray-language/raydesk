@@ -9,29 +9,28 @@ banco de pruebas de las características del lenguaje.
 ## Arquitectura
 
 ```
-┌─────────────────────────┐     HTTP (127.0.0.1:PUERTO)      ┌───────────────────────┐
-│  Ventana nativa          │  ───────────────────────────▶   │  Backend raylang      │
-│  std/ui + webview        │   POST /api/list                 │  web (Express-style)  │
-│  (assets/index.html,     │   POST /api/add     {title}      │   sobre net/webserver │
-│   app.css, app.js)       │   POST /api/toggle  {id}         │                       │
-│                          │   POST /api/delete  {id}         │  handlers stateless   │
-│  fetch() ◀───── JSON ────│   POST /api/clear-done           │  GET / , /app.* →     │
-└─────────────────────────┘   GET  / , /app.*  (assets)      │  web.static_embedded  │
-                                                              └──────────┬────────────┘
+┌─────────────────────────┐   window.ray.send(json)  ──────▶ ┌───────────────────────┐
+│  Ventana nativa          │        (IPC, std/ui)             │  Backend raylang      │
+│  std/ui + webview        │                                  │  event loop (1 fibra) │
+│  (assets/index.html,     │ ◀── eval_js(rayRender(tasks)) ── │  handle_message()     │
+│   app.css, app.js)       │                                  │  → std/kv (abierto 1x)│
+│                          │   GET / , /app.*  (assets) ────▶ │  web (solo estáticos) │
+└─────────────────────────┘                                  └──────────┬────────────┘
                                         std/kv (store, 1 clave/tarea)     ▼
                                                ~/Documents/RayDesk/tasks.kv
 ```
 
-- **UI**: `std/ui.open()` abre una ventana nativa que carga el servidor local;
-  el hilo principal atiende sus eventos y cierra el proceso al cerrar la ventana.
-- **Servidor**: se bindea con `net.tcp_listen("127.0.0.1", 0)`, se lee el puerto
-  con `net.local_port` (sin carrera) y se sirve con **`web.listen_on(build,
-  listener)`** en una fibra (`spawn`); la ventana abre en ese puerto.
-- **Assets**: **`web.static_embedded(app, "/", "assets")`** sirve el bundle
-  embebido (con ETag/304/Range y bloqueo de `..`); en `ray build --native` se
-  hornea en el binario (una `.app` arranca con `cwd=/`).
-- **Verbos**: los mounts de estáticos sirven GET/HEAD antes que las rutas, así que
-  la API va como **POST** (incluida la lectura `/api/list`).
+- **UI**: `std/ui.open()` abre una ventana nativa que carga la página; la **fibra
+  principal** corre el event loop (`ui.next_event`) y cierra el proceso al cerrar
+  la ventana.
+- **Datos (IPC, `std/ui`)**: la página envía comandos con **`window.ray.send(json)`**
+  (p. ej. `{"cmd":"add","title":…}`); llegan como evento `"message"` →
+  `handle_message` muta el store `kv` → **`ui.eval_js(win, "window.rayRender(…)")`**
+  empuja el estado nuevo a la página. Sin API HTTP de por medio.
+- **Assets**: **`web.static_embedded(app, "/", "assets")`** sirve la página
+  (bundle-safe, con ETag/304/Range); el servidor `web` corre en otra fibra
+  (`spawn` + `web.listen_on`) y **solo** sirve estáticos. El puerto se obtiene sin
+  carrera con `net.tcp_listen(…, 0)` + `net.local_port`.
 - **Look**: UI moderna con **Tailwind CSS** (build purgado: `assets/app.css` solo
   contiene las clases realmente usadas en `index.html`/`app.js`, ~12 KB
   minificado). Botones azules con estados hover/active/focus-ring, tarjetas
@@ -52,12 +51,13 @@ banco de pruebas de las características del lenguaje.
   se instalan solos.
 - **Persistencia**: `std/kv` con **una clave por tarea** (la clave es el `id`, un
   `uuid_v7` ordenable por tiempo, así `keys()` viene en orden de creación) y
-  **guardado atómico** (temp + rename). Es la única fuente de verdad; los handlers
-  son stateless (abren el store, operan, guardan por request), así que no hay estado
-  mutable compartido entre las fibras de conexión. Se guarda en
+  **guardado atómico** (temp + rename). El store se **abre una sola vez** y lo
+  posee la fibra del event loop (el único que lo toca), así que no se reabre por
+  mensaje ni hay carrera con la fibra del servidor. Se guarda en
   `~/Documents/RayDesk/tasks.kv` (en iOS la raíz del contenedor no es escribible;
   `Documents/` sí y persiste). `std/fs` se usa solo para crear ese directorio
-  (`fs.mkdir`, mkdir -p).
+  (`fs.mkdir`). Para acceso concurrente entre fibras `std/kv` ofrece la forma
+  actor (`open_shared`) y ops atómicas (`incr`, `set_if`), aquí no necesarias.
 
 ## Módulos
 
@@ -65,10 +65,10 @@ banco de pruebas de las características del lenguaje.
 src/
 ├── model.ray   # Todo + JSON (una tarea <-> objeto; lista para la API) + @test
 ├── store.ray   # repositorio sobre std/kv (list/add/toggle/remove/clear_done)
-└── main.ray    # app web (rutas + static_embedded), ventana std/ui + event loop
+└── main.ray    # web static + IPC (window.ray → std/kv) + std/ui event loop
 assets/
 ├── index.html  # utilidades Tailwind
-├── app.js      # frontend (clases Tailwind literales para el purge)
+├── app.js      # frontend: IPC (window.ray.send / window.rayRender) + Tailwind
 └── app.css     # GENERADO por Tailwind (purgado) — no editar a mano
 tailwind/
 ├── tailwind.config.js  # content: index.html + app.js
@@ -94,12 +94,11 @@ ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .deskt
 ```
 
 > Verificado con el MCP de raylang usando el parámetro `path` (contexto de
-> proyecto: resuelve módulos y dependencias). El servidor se probó headless con
-> `curl`: `GET /` (text/html + ETag), `GET /app.js` (text/javascript + ETag),
-> `POST /api/list|add|toggle|clear-done` y — reiniciando el servidor entre medias —
-> se confirmó que las tareas **persisten** en el store `kv` (altas, toggle y
-> clear-done sobreviven), con UTF-8, y `..` → 404. La ventana real se abre en tu
-> máquina con `ray run`.
+> proyecto: resuelve módulos y dependencias) y con corridas headless: los assets
+> se sirven bien (`web` + `RAY_UI_BACKEND=headless`), y el **camino IPC** se probó
+> inyectando un mensaje con `RAY_UI_MSG='{"cmd":"add","title":"…"}'` — la tarea
+> llega a `handle_message`, se guarda en el store `kv` (verificado abriéndolo) y
+> **persiste** entre lanzamientos, con UTF-8. La ventana real se abre con `ray run`.
 
 ## iOS
 
@@ -141,7 +140,8 @@ xcodebuild -project raydesk-ios/raydesk.xcodeproj -target raydesk \
 ## Características de raylang ejercitadas
 
 paquete `web` 0.2.0 (Tier-2: `listen_on`, `static_embedded`) · `std/ui`
-(ventana, `app_menu`, `set_about`, `menu`, `eval_js`, `save_file`, eventos) · `std/net` ·
+(ventana, **puente IPC** `window.ray.send`/evento `message`, `eval_js`, `app_menu`,
+`set_about`, `menu`, `save_file`, eventos) · `std/net` ·
 `std/kv` (store con guardado atómico) · `std/fs` (`mkdir`, export) ·
 `std/json` · `std/uuid` (`uuid_v7`) · `std/time` · módulos + `pub` ·
 concurrencia (`spawn`) · `struct`/`enum` (uso cross-módulo) · pattern matching ·

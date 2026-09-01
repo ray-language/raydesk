@@ -1,8 +1,10 @@
 "use strict";
 
-// RayDesk frontend. Talks to the raylang backend over a tiny JSON API served
-// from the same 127.0.0.1 origin. No framework — styles are Tailwind utilities
-// (the class strings here are literal so Tailwind's purge picks them up).
+// RayDesk frontend. Talks to the raylang backend over std/ui's built-in IPC
+// bridge: send a command with window.ray.send(json); raylang mutates the std/kv
+// store and pushes the new state back by calling window.rayRender(tasks).
+// Styles are Tailwind utilities (the class strings here are literal so Tailwind's
+// purge picks them up).
 
 const listEl = document.getElementById("list");
 const emptyEl = document.getElementById("empty");
@@ -20,16 +22,17 @@ const TEXT_DONE_CLASS = "flex-1 text-sm break-words line-through text-slate-400 
 const REMOVE_CLASS =
     "shrink-0 rounded-md px-1.5 py-0.5 text-lg leading-none text-slate-400 transition-colors hover:text-red-500";
 
-async function api(path, method = "GET", body = null) {
-    const opts = { method };
-    if (body !== null) {
-        opts.headers = { "Content-Type": "application/json" };
-        opts.body = JSON.stringify(body);
+// --- IPC to the raylang backend ---
+function send(cmd) {
+    if (window.ray && window.ray.send) {
+        window.ray.send(JSON.stringify(cmd));
     }
-    const res = await fetch(path, opts);
-    if (!res.ok) throw new Error(`${method} ${path} -> ${res.status}`);
-    return res.json();
 }
+
+// raylang calls this with the current task list after every command.
+window.rayRender = function (tasks) {
+    render(Array.isArray(tasks) ? tasks : []);
+};
 
 function render(tasks) {
     listEl.textContent = "";
@@ -43,7 +46,7 @@ function render(tasks) {
         cb.type = "checkbox";
         cb.className = CHECKBOX_CLASS;
         cb.checked = t.done;
-        cb.addEventListener("change", () => toggle(t.id));
+        cb.addEventListener("change", () => send({ cmd: "toggle", id: t.id }));
 
         const text = document.createElement("span");
         text.className = t.done ? TEXT_DONE_CLASS : TEXT_CLASS;
@@ -54,7 +57,7 @@ function render(tasks) {
         rm.type = "button";
         rm.textContent = "×";
         rm.title = "Eliminar";
-        rm.addEventListener("click", () => remove(t.id));
+        rm.addEventListener("click", () => send({ cmd: "delete", id: t.id }));
 
         li.append(cb, text, rm);
         listEl.appendChild(li);
@@ -66,39 +69,18 @@ function render(tasks) {
     emptyEl.hidden = tasks.length !== 0;
 }
 
-async function refresh() {
-    render(await api("/api/list", "POST", {}));
-}
-
-async function add(title) {
-    render(await api("/api/add", "POST", { title }));
-}
-
-async function toggle(id) {
-    render(await api("/api/toggle", "POST", { id }));
-}
-
-async function remove(id) {
-    render(await api("/api/delete", "POST", { id }));
-}
-
 formEl.addEventListener("submit", (e) => {
     e.preventDefault();
     const title = titleEl.value.trim();
     if (!title) return;
     titleEl.value = "";
-    add(title).catch(reportError);
+    send({ cmd: "add", title });
 });
 
-clearBtn.addEventListener("click", () => {
-    api("/api/clear-done", "POST", {}).then(render).catch(reportError);
-});
+clearBtn.addEventListener("click", () => send({ cmd: "clear" }));
 
-function reportError(err) {
-    console.error(err);
-}
-
-// About modal — opened from the native "Acerca de RayDesk" menu via ui.eval_js.
+// About modal — opened from the native "Acerca de RayDesk" menu via ui.eval_js
+// (used on Linux; on macOS the menu shows the native About panel).
 const aboutOverlay = document.getElementById("about-overlay");
 const aboutClose = document.getElementById("about-close");
 
@@ -118,4 +100,5 @@ document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") hideAbout();
 });
 
-refresh().catch(reportError);
+// Ask the backend for the initial list.
+send({ cmd: "list" });

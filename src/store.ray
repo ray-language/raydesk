@@ -1,13 +1,15 @@
 // Persistence, backed by std/kv — a key/value store with atomic saves
 // (temp + rename), one KEY PER TASK (the task id, a time-ordered uuid_v7, so
-// `keys()` comes back in creation order). This is the single source of truth;
-// handlers stay stateless.
+// `keys()` comes back in creation order).
+//
+// The store is opened ONCE (see `open`) and owned by the UI event-loop fiber,
+// which is the only fiber that touches it — so there is no per-request reopen and
+// no shared-state race (the web server fiber only serves static assets). This is
+// the simplest correct model for a single-owner event loop; the actor form
+// (`kv.open_shared`) is only needed when several fibers share the store.
 //
 // Location: `$HOME/Documents/RayDesk/tasks.kv`. On iOS the app container root
-// (`$HOME`) is NOT writable — only subdirectories like `Documents/` are — so the
-// store must live under Documents. The directory is created on demand with
-// `fs.mkdir` (mkdir -p). std/fs is used ONLY for that mkdir; all the task data
-// goes through std/kv.
+// (`$HOME`) is NOT writable — only subdirectories like `Documents/` are.
 
 import std/kv;
 import std/fs;
@@ -26,7 +28,7 @@ fn store_path() -> string {
     "${base_dir()}/tasks.kv"
 }
 
-fn open_store() -> Result<kv.Store, string> {
+pub fn open() -> Result<kv.Store, string> {
     let _dir = fs.mkdir(base_dir());
     kv.open(store_path())
 }
@@ -38,7 +40,7 @@ fn commit(s: kv.Store) -> unit {
     }
 }
 
-fn collect(s: kv.Store) -> [model.Todo] {
+pub fn list(s: kv.Store) -> [model.Todo] {
     var out: [model.Todo] = [];
     for k in s.keys() {
         match (s.get_string(k)) {
@@ -52,98 +54,52 @@ fn collect(s: kv.Store) -> [model.Todo] {
     out
 }
 
-pub fn list() -> [model.Todo] {
-    match (open_store()) {
-        Result.Ok(s) => collect(s),
-        Result.Err(e) => {
-            eprint("RayDesk: kv open failed: ${e}");
-            []
+pub fn add(s: kv.Store, title: string) -> unit {
+    let t = model.Todo {
+        id: uuid.uuid_v7(),
+        title: title,
+        done: false,
+        created_ms: time.now(),
+    };
+    s.set_string(t.id, model.todo_to_json_str(t));
+    commit(s);
+}
+
+pub fn toggle(s: kv.Store, id: string) -> unit {
+    match (s.get_string(id)) {
+        Option.Some(v) => match (model.todo_from_json_str(v)) {
+            Option.Some(t) => {
+                let flipped = model.Todo {
+                    id: t.id,
+                    title: t.title,
+                    done: !t.done,
+                    created_ms: t.created_ms,
+                };
+                s.set_string(id, model.todo_to_json_str(flipped));
+                commit(s);
+            },
+            Option.None => {},
         },
+        Option.None => {},
     }
 }
 
-pub fn add(title: string) -> [model.Todo] {
-    match (open_store()) {
-        Result.Ok(s) => {
-            let t = model.Todo {
-                id: uuid.uuid_v7(),
-                title: title,
-                done: false,
-                created_ms: time.now(),
-            };
-            s.set_string(t.id, model.todo_to_json_str(t));
-            commit(s);
-            collect(s)
-        },
-        Result.Err(e) => {
-            eprint("RayDesk: kv open failed: ${e}");
-            []
-        },
-    }
+pub fn remove(s: kv.Store, id: string) -> unit {
+    let _removed = s.delete(id);
+    commit(s);
 }
 
-pub fn toggle(id: string) -> [model.Todo] {
-    match (open_store()) {
-        Result.Ok(s) => {
-            match (s.get_string(id)) {
-                Option.Some(v) => match (model.todo_from_json_str(v)) {
-                    Option.Some(t) => {
-                        let flipped = model.Todo {
-                            id: t.id,
-                            title: t.title,
-                            done: !t.done,
-                            created_ms: t.created_ms,
-                        };
-                        s.set_string(id, model.todo_to_json_str(flipped));
-                        commit(s);
-                    },
-                    Option.None => {},
+pub fn clear_done(s: kv.Store) -> unit {
+    for k in s.keys() {
+        match (s.get_string(k)) {
+            Option.Some(v) => match (model.todo_from_json_str(v)) {
+                Option.Some(t) => {
+                    if (t.done) { let _r = s.delete(k); }
                 },
                 Option.None => {},
-            }
-            collect(s)
-        },
-        Result.Err(e) => {
-            eprint("RayDesk: kv open failed: ${e}");
-            []
-        },
+            },
+            Option.None => {},
+        }
     }
-}
-
-pub fn remove(id: string) -> [model.Todo] {
-    match (open_store()) {
-        Result.Ok(s) => {
-            let _removed = s.delete(id);
-            commit(s);
-            collect(s)
-        },
-        Result.Err(e) => {
-            eprint("RayDesk: kv open failed: ${e}");
-            []
-        },
-    }
-}
-
-pub fn clear_done() -> [model.Todo] {
-    match (open_store()) {
-        Result.Ok(s) => {
-            for k in s.keys() {
-                match (s.get_string(k)) {
-                    Option.Some(v) => match (model.todo_from_json_str(v)) {
-                        Option.Some(t) => {
-                            if (t.done) { let _r = s.delete(k); }
-                        },
-                        Option.None => {},
-                    },
-                    Option.None => {},
-                }
-            }
-            commit(s);
-            collect(s)
-        },
-        Result.Err(e) => {
-            eprint("RayDesk: kv open failed: ${e}");
-            []
-        },
-    }
+    commit(s);
 }

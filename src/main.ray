@@ -1,22 +1,21 @@
 // RayDesk — a small desktop task manager written in raylang.
 //
-// A native window (std/ui, system webview) loads a local HTTP backend built on
-// the `web` framework (Express-style routing over net/webserver, the recommended
-// base for std/ui app backends). The frontend (assets/) is served straight from
-// the embedded bundle with `web.static_embedded` (live disk in dev, baked into
-// the native binary / .app). Request handlers are stateless — the JSON file in
-// `store` is the source of truth — which keeps shared mutable state out of the
-// per-connection fibers.
+// A native window (std/ui, system webview) shows the frontend (assets/), which is
+// served over a tiny local HTTP server (the `web` framework + web.static_embedded,
+// bundle-safe). Everything else — the DATA channel — goes over std/ui's built-in
+// IPC bridge (M152): the page calls `window.ray.send(json)`, raylang handles it in
+// the event loop as a "message" event, mutates the std/kv store, and pushes the
+// new state back with `eval_js(window.rayRender(...))`. No HTTP JSON API.
 //
-// Note on verbs: the web framework serves GET/HEAD from the static mount FIRST
-// (so a "/" mount can't be shadowed by a route), and lets POST under the mount
-// reach routing. RayDesk therefore mounts the assets at "/" and exposes the API
-// as POST endpoints — including the read (`/api/list`).
+// State: the std/kv store is opened ONCE and owned by this event-loop fiber (the
+// only one that touches it), so there is no per-request reopen and no shared-state
+// race — the web fiber only serves static files.
 
 import web/framework as web;
 import std/ui;
 import std/net;
 import std/fs;
+import std/kv;
 import model;
 import store;
 
@@ -24,67 +23,45 @@ const APP_TITLE: string = "RayDesk";
 const WIN_W: int = 920;
 const WIN_H: int = 660;
 
-// --- API handlers: thin wrappers over the std/kv-backed `store` repository ---
-
-fn api_list(c: web.Ctx, r: web.Res) -> unit {
-    web.json(r, model.todos_to_json(store.list()));
-}
-
-fn api_add(c: web.Ctx, r: web.Res) -> unit {
-    let title = model.field_of(web.body(c), "title").trim();
-    let todos = if (title.len() > 0) { store.add(title) } else { store.list() };
-    web.json(r, model.todos_to_json(todos));
-}
-
-fn api_toggle(c: web.Ctx, r: web.Res) -> unit {
-    let todos = store.toggle(model.field_of(web.body(c), "id"));
-    web.json(r, model.todos_to_json(todos));
-}
-
-fn api_delete(c: web.Ctx, r: web.Res) -> unit {
-    let todos = store.remove(model.field_of(web.body(c), "id"));
-    web.json(r, model.todos_to_json(todos));
-}
-
-fn api_clear(c: web.Ctx, r: web.Res) -> unit {
-    web.json(r, model.todos_to_json(store.clear_done()));
-}
-
+// The web app only serves the embedded frontend; all data flows over the IPC
+// bridge, so there are no API routes.
 fn build() -> web.App {
     let app = web.new_app();
-    web.POST(app, "/api/list", api_list);
-    web.POST(app, "/api/add", api_add);
-    web.POST(app, "/api/toggle", api_toggle);
-    web.POST(app, "/api/delete", api_delete);
-    web.POST(app, "/api/clear-done", api_clear);
-    // Serves index.html at "/", plus /app.css and /app.js, from the [native]
-    // embed bundle. Path traversal ("..") is rejected by the framework.
     web.static_embedded(app, "/", "assets");
     app
 }
 
+// Pushes the current task list to the page (the page defines window.rayRender).
+fn push_state(win: int, s: kv.Store) -> unit {
+    let json = model.todos_to_json(store.list(s));
+    let _e = ui.eval_js(win, "window.rayRender && window.rayRender(${json})");
+}
+
+// Handles one IPC message from the page: {"cmd": "...", ...}. Any command re-renders.
+fn handle_message(win: int, s: kv.Store, msg: string) -> unit {
+    let cmd = model.field_of(msg, "cmd");
+    if (cmd == "add") {
+        let title = model.field_of(msg, "title").trim();
+        if (title.len() > 0) { store.add(s, title); }
+    } else if (cmd == "toggle") {
+        store.toggle(s, model.field_of(msg, "id"));
+    } else if (cmd == "delete") {
+        store.remove(s, model.field_of(msg, "id"));
+    } else if (cmd == "clear") {
+        store.clear_done(s);
+    }
+    push_state(win, s);
+}
+
 // --- Menus (std/ui) ---
-//
-// Custom top-level menus. A click emits a "menu" event whose `tag` we act on in
-// the event loop. Actions drive the frontend through `ui.eval_js` (the raylang ->
-// JS bridge), reusing the page's own handlers so the UI stays in sync; "export"
-// uses the native save dialog. The standard App/Edit menus (⌘Q, clipboard, undo)
-// install themselves. On Linux the menu bar is per-window, so register BEFORE
-// opening the window.
+
 fn install_menus() -> unit {
-    // Fill the native macOS "About" panel (name / version / description /
-    // copyright) — opened by the "role:about" item below.
     let _s = ui.set_about(
         "RayDesk",
         "0.1.0",
         "Gestor de tareas de escritorio e iOS",
         "© 2026 Rayala · Hecho con raylang"
     );
-    // "Acerca de RayDesk" in the APPLICATION menu (macOS: the bold first menu,
-    // above Hide/Quit). `name` also retitles it to "RayDesk" even under `ray run`
-    // (where it would show the process name "ray"). Tag "role:about" opens the
-    // native About panel on macOS (no event); on Linux it emits a "menu" event and
-    // we fall back to the in-app modal (see `on_menu`).
     let _a = ui.app_menu("RayDesk", [
         ui.MenuItem { tag: "role:about", title: "Acerca de RayDesk", shortcut: "" },
     ]);
@@ -98,12 +75,11 @@ fn install_menus() -> unit {
     ]);
 }
 
-// Writes the current task list as JSON to a user-chosen path (native "save as").
-fn export_tasks() -> unit {
+fn export_tasks(s: kv.Store) -> unit {
     match (ui.save_file("raydesk-tareas.json")) {
         Result.Ok(chosen) => match (chosen) {
             Option.Some(path) => {
-                match (fs.write_file(path, model.todos_to_json(store.list()))) {
+                match (fs.write_file(path, model.todos_to_json(store.list(s)))) {
                     Result.Ok(_n) => {},
                     Result.Err(e) => eprint("RayDesk: export failed: ${e}"),
                 }
@@ -114,24 +90,31 @@ fn export_tasks() -> unit {
     }
 }
 
-fn on_menu(win: int, tag: string) -> unit {
+fn on_menu(win: int, s: kv.Store, tag: string) -> unit {
     if (tag == "role:about") {
         // Reached only on Linux (macOS opens the native About panel, no event).
         let _e = ui.eval_js(win, "window.rayShowAbout && window.rayShowAbout();");
     } else if (tag == "new") {
         let _e = ui.eval_js(win, "var e=document.getElementById('title'); if(e){e.focus();}");
     } else if (tag == "reload") {
-        let _e = ui.eval_js(win, "location.reload();");
+        push_state(win, s);
     } else if (tag == "clear") {
-        let _e = ui.eval_js(win, "var b=document.getElementById('clear-done'); if(b){b.click();}");
+        store.clear_done(s);
+        push_state(win, s);
     } else if (tag == "export") {
-        export_tasks();
+        export_tasks(s);
     }
 }
 
 fn main() -> int {
-    // Bind first, learn the port, then serve on the same listener — no
-    // close/re-bind race (web.listen_on, M150). The window opens on that port.
+    let s = match (store.open()) {
+        Result.Ok(handle) => handle,
+        Result.Err(e) => {
+            eprint("RayDesk: cannot open store: ${e}");
+            return 1;
+        }
+    };
+
     let listener = match (net.tcp_listen("127.0.0.1", 0)) {
         Result.Ok(l) => l,
         Result.Err(e) => {
@@ -144,7 +127,6 @@ fn main() -> int {
 
     let _server = spawn(fn() { let _r = web.listen_on(build, listener); });
 
-    // Register menus before opening (Linux applies them to later windows).
     install_menus();
 
     let win = match (ui.open(APP_TITLE, url, WIN_W, WIN_H)) {
@@ -161,7 +143,9 @@ fn main() -> int {
                 if (ev.kind == "closed") {
                     exit(0);
                 } else if (ev.kind == "menu") {
-                    on_menu(win, ev.tag);
+                    on_menu(win, s, ev.tag);
+                } else if (ev.kind == "message") {
+                    handle_message(win, s, ev.tag);
                 }
             },
             Result.Err(e) => {

@@ -36,12 +36,15 @@ Queda como deseo **menor**: un servidor mínimo en la *stdlib embebida* (sin
 
 ## Pendientes
 
-### 1. Un puente IPC de primera clase para `std/ui`
+### ✅ RESUELTO Y ADOPTADO — 1. Puente IPC de primera clase para `std/ui`
 
-`std/ui` da `eval_js(h, js)` (raylang → JS) pero el camino de vuelta (JS →
-raylang) hay que fabricarlo con un servidor HTTP local (ahora con `web`). Un
-canal de mensajes bidireccional tipado (`ui.on_message()` + `window.raydesk.send`
-en el webview) evitaría el servidor para la mayoría de apps.
+raylang añadió el **puente IPC integrado** (M152): en JS `window.ray.send(text)`
+emite un evento `"message"` (con `tag`=texto) que el event loop recibe con
+`ui.next_event()`, y `eval_js` va de vuelta. RayDesk migró el **canal de datos** a
+esto: la página envía `{"cmd":…}` con `window.ray.send`, `handle_message` muta el
+store `kv` y empuja el estado con `eval_js(window.rayRender(…))` — se eliminó la
+API HTTP (rutas `/api/*`); `web` queda solo sirviendo la página. (Headless se
+prueba inyectando mensajes con `RAY_UI_MSG`.)
 
 ### ✅ RESUELTO Y ADOPTADO (web 0.2.0) — 2. Puerto libre para `web.listen`
 
@@ -109,16 +112,15 @@ Queda un desajuste **inverso** menor: la referencia §11 documenta `listen_on` y
 `static_embedded` (M150/M147) que aún no están en el paquete publicado 0.1.0
 (ver #2 y #3) — ahora la doc va por delante del paquete.
 
-### 8. Estado compartido entre handlers del framework `web`
+### ✅ RESUELTO — 8. Manejo de estado con `std/kv`
 
-Con `web`, cada conexión corre en su fibra y las fibras tienen heaps aislados, así
-que no se puede compartir un `var todos` capturado entre handlers. RayDesk lo
-resuelve siendo **stateless**: cada request abre el store `std/kv`, opera y guarda
-(guardado atómico). La app es mono-usuario y los datos pequeños, así que abrir por
-request es barato. Para más carga se usaría la forma **actor** de `std/kv`
-(`open_shared`/`share`, un dueño de estado + canales) y así no releer el archivo en
-cada request. **Deseable:** un helper de estado por-app en `web` (p. ej. envolver
-ese actor) para no cablearlo en cada proyecto.
+En la versión con API HTTP el estado se releía por request (handlers stateless
+sobre fibras aisladas). Al mover el canal de datos al puente IPC (#1), el estado lo
+maneja **una sola fibra** (el event loop de `std/ui`): RayDesk **abre el store `kv`
+una vez** en `main` y lo muta ahí — sin reabrir por mensaje y sin carrera (la fibra
+del servidor solo sirve estáticos). Además `std/kv` sumó ops atómicas **`incr`** y
+**`set_if`** (CAS) y mantiene la forma **actor** (`open_shared`) para cuando varias
+fibras comparten el store; aquí, con un único dueño, no hacen falta.
 
 ### 9. `ray bundle --ios` borra la config de firma en cada regeneración
 

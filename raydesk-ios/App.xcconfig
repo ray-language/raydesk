@@ -11,13 +11,10 @@ TARGETED_DEVICE_FAMILY = 1,2
 SDKROOT = iphoneos
 CLANG_ENABLE_MODULES = YES
 CLANG_ENABLE_OBJC_ARC = YES
-// Firma. OJO: `ray bundle --ios` REGENERA este archivo entero (no solo el
-// pbxproj), así que estas líneas se borran en cada bundle. Para no perderlas usa
-// `raydesk-ios/rebuild.sh` (hace el bundle y las vuelve a inyectar). Ver ROADMAP #9.
-CODE_SIGN_STYLE = Automatic
-DEVELOPMENT_TEAM = A2CY27N22G
 // El staticlib del programa raylang: mismo nombre en ambos dirs, la RUTA elige por SDK
 // (dispositivo y simulador son ambos arm64 — jamás un lipo).
 LIBRARY_SEARCH_PATHS[sdk=iphoneos*] = $(PROJECT_DIR)/libs
 LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*] = $(PROJECT_DIR)/libs-sim
 OTHER_LDFLAGS = -lray_app -framework WebKit -lobjc
+CODE_SIGN_STYLE = Automatic
+DEVELOPMENT_TEAM = A2CY27N22G

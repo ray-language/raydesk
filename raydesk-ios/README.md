@@ -7,7 +7,9 @@
 - Simulador (sin firma):
   `xcodebuild -project <Name>.xcodeproj -target <Name> -sdk iphonesimulator -configuration Debug build CODE_SIGNING_ALLOWED=NO`
   y luego `xcrun simctl boot <device>` + `install` + `launch`.
-- Dispositivo: abrir el `.xcodeproj` en Xcode y elegir tu equipo de firma (Signing & Teams).
+- Dispositivo: el equipo de firma va en `App.xcconfig` (`DEVELOPMENT_TEAM`) y
+  **`ray bundle --ios` lo respeta** (no lo regenera); abre el `.xcodeproj` en Xcode
+  y compila. Para cambiarlo, edita esa línea del xcconfig.
 - El programa raylang corre DENTRO de la app (staticlib): su webserver embebido sirve la UI y
   `ui.open(title, url)` carga la URL en el webview. Los eventos de ciclo de vida llegan por
   `ui.next_event()` como kind="lifecycle", tag="background"/"foreground".

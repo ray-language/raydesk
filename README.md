@@ -82,10 +82,9 @@ tailwind/
 └── build.sh            # regenera assets/app.css
 raydesk-ios/            # shell iOS (Xcode) generado por `ray bundle --ios`
 ├── Shell/              # AppDelegate + SceneDelegate (UIScene) en Objective-C
-├── App.xcconfig        # build settings + firma (DEVELOPMENT_TEAM)
+├── App.xcconfig        # build settings + firma (DEVELOPMENT_TEAM, respetada por el bundle)
 ├── raydesk.xcodeproj/
-├── libs/ · libs-sim/   # staticlib del programa (regenerable, gitignored)
-└── rebuild.sh          # ray bundle --ios + re-aplica la firma
+└── libs/ · libs-sim/   # staticlib del programa (regenerable, gitignored)
 raydesk-android/        # shell Android (Gradle) generado por `ray bundle --android`
 ├── app/src/main/       # MainActivity + RayBridge (Java), Manifest, res/
 │   └── jniLibs/<abi>/  # libray_app.so (cdylib del programa; regenerable, gitignored)
@@ -129,9 +128,9 @@ escritorio. Los eventos de ciclo de vida llegan por `ui.next_event()` como
 ### Compilar y ejecutar
 
 ```sh
-# Regenera el staticlib + proyecto Xcode y re-aplica la firma en cada build
-raydesk-ios/rebuild.sh
-# (equivale a `ray bundle --ios`, que además borra la firma — ver ROADMAP #9)
+# Regenera el staticlib + proyecto Xcode (respeta la firma existente)
+ray bundle --ios
+#   --ios-target device|sim   # construye solo un lado (conserva el otro .a)
 
 # Simulador (sin firma):
 xcodebuild -project raydesk-ios/raydesk.xcodeproj -target raydesk \
@@ -141,10 +140,8 @@ xcodebuild -project raydesk-ios/raydesk.xcodeproj -target raydesk \
 # Dispositivo: abre raydesk-ios/raydesk.xcodeproj en Xcode y compila.
 ```
 
-- **Firma**: el `DEVELOPMENT_TEAM` se fija en `raydesk-ios/App.xcconfig`. Como
-  `ray bundle --ios` regenera ese archivo, usa **`raydesk-ios/rebuild.sh`** (o
-  `RAY_IOS_TEAM=XXXXXXXXXX raydesk-ios/rebuild.sh`) para re-aplicarlo tras cada
-  build. Detalle en [`ROADMAP.md`](ROADMAP.md) #9.
+- **Firma**: el `DEVELOPMENT_TEAM` se fija en `raydesk-ios/App.xcconfig` y
+  **`ray bundle --ios` lo respeta** (no lo regenera) — ver [`ROADMAP.md`](ROADMAP.md) #9.
 - Los `libs/`/`libs-sim/` (staticlibs, ~15 MB) están **gitignored**: se regeneran
   con el comando de arriba.
 

@@ -128,29 +128,23 @@ del servidor solo sirve estáticos). Además `std/kv` sumó ops atómicas **`inc
 **`set_if`** (CAS) y mantiene la forma **actor** (`open_shared`) para cuando varias
 fibras comparten el store; aquí, con un único dueño, no hacen falta.
 
-### 9. `ray bundle --ios` borra la config de firma en cada regeneración
+### ✅ RESUELTO — 9. `ray bundle --ios` ya respeta la firma
 
-Cada `ray bundle --ios` **regenera `project.pbxproj`**, y con él desaparece el
-`DEVELOPMENT_TEAM` que Xcode escribe ahí al elegir el equipo en *Signing & Teams*
-— hay que volver a ponerlo tras cada bundle.
+Historia: al principio cada `ray bundle --ios` regeneraba `project.pbxproj` y
+`App.xcconfig` enteros, borrando el `DEVELOPMENT_TEAM`; no había lugar estable para
+el team, y se usaba un script `rebuild.sh` que lo re-inyectaba tras cada bundle.
 
-**Confirmado empíricamente:** `ray bundle --ios` **regenera `App.xcconfig` entero**
-(no solo el pbxproj), así que poner la firma en el xcconfig **tampoco sobrevive** —
-se borra en el siguiente bundle. Es decir, NINGÚN archivo del proyecto que toque el
-bundle es un lugar estable para el team. (Corrige la suposición previa de esta nota.)
+**Ahora está resuelto:** `ray bundle --ios` **preserva** el `DEVELOPMENT_TEAM` que
+ya esté en `App.xcconfig`. Verificado: tras un bundle el archivo queda
+byte-idéntico (`git diff` vacío) con la firma intacta, y el propio comando lo
+reporta:
 
-Workaround real en RayDesk: **`raydesk-ios/rebuild.sh`** — hace `ray bundle --ios` y
-después re-inyecta `CODE_SIGN_STYLE`/`DEVELOPMENT_TEAM` en `App.xcconfig`. Se usa en
-lugar de llamar a `ray bundle --ios` directamente (team configurable con
-`RAY_IOS_TEAM`).
+```
+device: signing team A2CY27N22G already in App.xcconfig; open the project in Xcode and run
+```
 
-**Deseable (mejora en raylang), en orden de preferencia:**
-- un `[ios] development_team = "…"` en `ray.toml` (o flag `--team`) que el bundle
-  escriba en el `App.xcconfig`/pbxproj generado — la solución de raíz; o
-- que `ray bundle --ios` **preserve** un `DEVELOPMENT_TEAM` ya presente al regenerar
-  (merge en vez de clobber); o
-- que NO reescriba `App.xcconfig` cuando ya existe (respetar el "ajusta aquí" que su
-  propia cabecera promete).
+Se eliminó `rebuild.sh` (ya no hace falta): la firma se fija una vez en
+`App.xcconfig` y sobrevive a los rebuilds.
 
 ### ✅ RESUELTO Y ADOPTADO — 10. Integrar el "About" en el menú de app de macOS
 

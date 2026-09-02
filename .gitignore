@@ -35,3 +35,6 @@ raydesk-android/app/build/
 raydesk-android/local.properties
 # Compiled raylang program (regenerate with `ray bundle --android`)
 raydesk-android/app/src/main/jniLibs/**/*.so
+# IDE metadata (Eclipse/Buildship)
+raydesk-android/.project
+raydesk-android/.settings/

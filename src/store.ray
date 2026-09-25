@@ -41,7 +41,7 @@ pub fn open() -> Result<kv.Store, string> {
 
 fn commit(s: kv.Store) -> unit {
     match (s.save()) {
-        Result.Ok(_n) => {},
+        Result.Ok(_n) => { },
         Result.Err(e) => eprint("RayDesk: kv save failed: ${e}"),
     }
 }
@@ -52,21 +52,16 @@ pub fn list(s: kv.Store) -> [model.Todo] {
         match (s.get_string(k)) {
             Option.Some(v) => match (model.todo_from_json_str(v)) {
                 Option.Some(t) => out.push(t),
-                Option.None => {},
+                Option.None => { },
             },
-            Option.None => {},
+            Option.None => { },
         }
     }
     out
 }
 
 pub fn add(s: kv.Store, title: string) -> unit {
-    let t = model.Todo {
-        id: uuid.uuid_v7(),
-        title: title,
-        done: false,
-        created_ms: time.now(),
-    };
+    let t = model.Todo { id: uuid.uuid_v7(), title: title, done: false, created_ms: time.now() };
     s.set_string(t.id, model.todo_to_json_str(t));
     commit(s);
 }
@@ -79,14 +74,14 @@ pub fn toggle(s: kv.Store, id: string) -> unit {
                     id: t.id,
                     title: t.title,
                     done: !t.done,
-                    created_ms: t.created_ms,
+                    created_ms: t.created_ms
                 };
                 s.set_string(id, model.todo_to_json_str(flipped));
                 commit(s);
             },
-            Option.None => {},
+            Option.None => { },
         },
-        Option.None => {},
+        Option.None => { },
     }
 }
 
@@ -100,11 +95,13 @@ pub fn clear_done(s: kv.Store) -> unit {
         match (s.get_string(k)) {
             Option.Some(v) => match (model.todo_from_json_str(v)) {
                 Option.Some(t) => {
-                    if (t.done) { let _r = s.delete(k); }
+                    if (t.done) {
+                        let _r = s.delete(k);
+                    }
                 },
-                Option.None => {},
+                Option.None => { },
             },
-            Option.None => {},
+            Option.None => { },
         }
     }
     commit(s);
@@ -116,7 +113,9 @@ pub fn apply(s: kv.Store, msg: string) -> unit {
     let cmd = model.field_of(msg, "cmd");
     if (cmd == "add") {
         let title = model.field_of(msg, "title").trim();
-        if (title.len() > 0) { add(s, title); }
+        if (title.len() > 0) {
+            add(s, title);
+        }
     } else if (cmd == "toggle") {
         toggle(s, model.field_of(msg, "id"));
     } else if (cmd == "delete") {

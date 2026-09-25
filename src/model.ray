@@ -67,12 +67,14 @@ fn jnum(j: json.Json, key: string) -> int {
 pub fn todo_from_json_str(src: string) -> Option<Todo> {
     match (json.parse(src)) {
         Result.Ok(v) => match (v) {
-            json.Json.JObject(_m) => Option.Some(Todo {
-                id: jstr(v, "id"),
-                title: jstr(v, "title"),
-                done: jbool(v, "done"),
-                created_ms: jnum(v, "created_ms"),
-            }),
+            json.Json.JObject(_m) => Option.Some(
+                Todo {
+                    id: jstr(v, "id"),
+                    title: jstr(v, "title"),
+                    done: jbool(v, "done"),
+                    created_ms: jnum(v, "created_ms")
+                }
+            ),
             _ => Option.None,
         },
         Result.Err(_) => Option.None,

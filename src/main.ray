@@ -20,7 +20,9 @@ import model;
 import store;
 
 const APP_TITLE: string = "RayDesk";
+
 const WIN_W: int = 920;
+
 const WIN_H: int = 660;
 
 // The web app only serves the embedded frontend; all data flows over the IPC
@@ -64,17 +66,16 @@ fn install_menus() -> unit {
         "Gestor de tareas de escritorio y móvil",
         "© 2026 Rayala · Hecho con raylang"
     );
-    let _a = ui.app_menu("RayDesk", [
-        ui.MenuItem { tag: "role:about", title: "Acerca de RayDesk", shortcut: "" },
-    ]);
-    let _f = ui.menu("Archivo", [
-        ui.MenuItem { tag: "new", title: "Nueva tarea", shortcut: "N" },
-        ui.MenuItem { tag: "export", title: "Exportar tareas…", shortcut: "E" },
-        ui.MenuItem { tag: "reload", title: "Recargar", shortcut: "R" },
-    ]);
-    let _t = ui.menu("Tarea", [
-        ui.MenuItem { tag: "clear", title: "Limpiar completadas", shortcut: "K" },
-    ]);
+    let _a = ui.app_menu("RayDesk", [ui.item("role:about", "Acerca de RayDesk", "")]);
+    let _f = ui.menu(
+        "Archivo",
+        [
+            ui.item("new", "Nueva tarea", "N"),
+            ui.item("export", "Exportar tareas…", "E"),
+            ui.item("reload", "Recargar", "R")
+        ]
+    );
+    let _t = ui.menu("Tarea", [ui.item("clear", "Limpiar completadas", "K")]);
 }
 
 fn export_tasks(s: kv.Store) -> unit {
@@ -82,11 +83,11 @@ fn export_tasks(s: kv.Store) -> unit {
         Result.Ok(chosen) => match (chosen) {
             Option.Some(path) => {
                 match (fs.write_file(path, model.todos_to_json(store.list(s)))) {
-                    Result.Ok(_n) => {},
+                    Result.Ok(_n) => { },
                     Result.Err(e) => eprint("RayDesk: export failed: ${e}"),
                 }
             },
-            Option.None => {},
+            Option.None => { },
         },
         Result.Err(e) => eprint("RayDesk: save dialog failed: ${e}"),
     }
@@ -114,7 +115,7 @@ fn main() -> int {
         Result.Err(e) => {
             eprint("RayDesk: cannot open store: ${e}");
             return 1;
-        }
+        },
     };
 
     let listener = match (net.tcp_listen("127.0.0.1", 0)) {
@@ -122,12 +123,14 @@ fn main() -> int {
         Result.Err(e) => {
             eprint("RayDesk: cannot bind local server: ${e}");
             return 1;
-        }
+        },
     };
     let port = net.local_port(listener);
     let url = "http://127.0.0.1:${port}/";
 
-    let _server = spawn(fn() { let _r = web.listen_on(build, listener); });
+    let _server = spawn(fn() {
+        let _r = web.listen_on(build, listener);
+    });
 
     install_menus();
 
@@ -136,7 +139,7 @@ fn main() -> int {
         Result.Err(e) => {
             eprint("RayDesk: cannot open window: ${e}");
             return 1;
-        }
+        },
     };
 
     while (true) {
@@ -153,7 +156,7 @@ fn main() -> int {
             Result.Err(e) => {
                 eprint("RayDesk: ui event error: ${e}");
                 exit(1);
-            }
+            },
         }
     }
     0

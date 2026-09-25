@@ -2,7 +2,11 @@
 //
 // A native window (std/ui, system webview) shows the frontend (assets/), which is
 // served over a tiny local HTTP server (the `web` framework + web.static_embedded,
-// bundle-safe). Everything else — the DATA channel — goes over std/ui's built-in
+// bundle-safe). The server is locked to that ONE window with web.listen_local: the
+// window opens with `?ray_token=<token>` (a fresh 128-bit token per launch), and any
+// other process on the machine, or any web page in the user's browser, gets 403.
+// (ray://app + ui.mount_embed would need no port at all, but the iOS/Android shells
+// load the UI from this same local server.) Everything else — the DATA channel — goes over std/ui's built-in
 // IPC bridge (M152): the page calls `window.ray.send(json)`, raylang handles it in
 // the event loop as a "message" event, mutates the std/kv store, and pushes the
 // new state back with `eval_js(window.rayRender(...))`. No HTTP JSON API.
@@ -11,27 +15,18 @@
 // only one that touches it), so there is no per-request reopen and no shared-state
 // race — the web fiber only serves static files.
 
-import web/framework as web;
 import std/ui;
-import std/net;
 import std/fs;
 import std/kv;
 import model;
 import store;
+import frontend;
 
 const APP_TITLE: string = "RayDesk";
 
 const WIN_W: int = 920;
 
 const WIN_H: int = 660;
-
-// The web app only serves the embedded frontend; all data flows over the IPC
-// bridge, so there are no API routes.
-fn build() -> web.App {
-    let app = web.new_app();
-    web.static_embedded(app, "/", "assets");
-    app
-}
 
 // Pushes the current task list to the page (the page defines window.rayRender).
 // Used for backend-initiated updates (menus) and the fire-and-forget fallback.
@@ -79,7 +74,11 @@ fn install_menus() -> unit {
 }
 
 fn export_tasks(s: kv.Store) -> unit {
-    match (ui.save_file("raydesk-tareas.json")) {
+    var o = ui.file_options();
+    o.title = "Exportar tareas";
+    o.suggested = "raydesk-tareas.json";
+    o.filters = [ui.filter("JSON", ["json"])];
+    match (ui.save_file_with(o)) {
         Result.Ok(chosen) => match (chosen) {
             Option.Some(path) => {
                 match (fs.write_file(path, model.todos_to_json(store.list(s)))) {
@@ -118,19 +117,13 @@ fn main() -> int {
         },
     };
 
-    let listener = match (net.tcp_listen("127.0.0.1", 0)) {
-        Result.Ok(l) => l,
+    let url = match (frontend.start(frontend.new_token())) {
+        Result.Ok(u) => u,
         Result.Err(e) => {
-            eprint("RayDesk: cannot bind local server: ${e}");
+            eprint("RayDesk: cannot start the local server: ${e}");
             return 1;
         },
     };
-    let port = net.local_port(listener);
-    let url = "http://127.0.0.1:${port}/";
-
-    let _server = spawn(fn() {
-        let _r = web.listen_on(build, listener);
-    });
 
     install_menus();
 

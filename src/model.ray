@@ -25,43 +25,17 @@ pub fn todo_to_json_str(t: Todo) -> string {
     json.stringify(todo_to_json(t))
 }
 
+// A top-level field of a JSON object, or the zero value when absent / mistyped.
 fn jstr(j: json.Json, key: string) -> string {
-    match (j) {
-        json.Json.JObject(m) => match (get(m, key)) {
-            Option.Some(v) => match (v) {
-                json.Json.JStr(s) => s,
-                _ => "",
-            },
-            Option.None => "",
-        },
-        _ => "",
-    }
+    json.get_string(j, key).unwrap_or("")
 }
 
 fn jbool(j: json.Json, key: string) -> bool {
-    match (j) {
-        json.Json.JObject(m) => match (get(m, key)) {
-            Option.Some(v) => match (v) {
-                json.Json.JBool(b) => b,
-                _ => false,
-            },
-            Option.None => false,
-        },
-        _ => false,
-    }
+    json.get_bool(j, key).unwrap_or(false)
 }
 
 fn jnum(j: json.Json, key: string) -> int {
-    match (j) {
-        json.Json.JObject(m) => match (get(m, key)) {
-            Option.Some(v) => match (v) {
-                json.Json.JNum(n) => n as int,
-                _ => 0,
-            },
-            Option.None => 0,
-        },
-        _ => 0,
-    }
+    json.get_int(j, key).unwrap_or(0)
 }
 
 pub fn todo_from_json_str(src: string) -> Option<Todo> {

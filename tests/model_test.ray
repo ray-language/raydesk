@@ -21,11 +21,11 @@ fn todo_json_roundtrip() {
 fn bad_json_is_none() {
     match (model.todo_from_json_str("not json")) {
         Option.Some(_t) => panic("should be None"),
-        Option.None => {},
+        Option.None => { },
     }
     match (model.todo_from_json_str("[1,2,3]")) {
         Option.Some(_t) => panic("array is not a todo object"),
-        Option.None => {},
+        Option.None => { },
     }
 }
 
@@ -33,7 +33,7 @@ fn bad_json_is_none() {
 fn list_json() {
     let ts = [
         model.Todo { id: "a", title: "x", done: false, created_ms: 1 },
-        model.Todo { id: "b", title: "y", done: true, created_ms: 2 },
+        model.Todo { id: "b", title: "y", done: true, created_ms: 2 }
     ];
     let s = model.todos_to_json(ts);
     assert(s.contains("\"id\":\"a\""));

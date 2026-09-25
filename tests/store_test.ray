@@ -21,7 +21,9 @@ fn fresh(path: string) -> kv.Store {
 fn has_title(xs: [model.Todo], title: string) -> bool {
     var found = false;
     for t in xs {
-        if (t.title == title) { found = true; }
+        if (t.title == title) {
+            found = true;
+        }
     }
     found
 }
@@ -29,7 +31,9 @@ fn has_title(xs: [model.Todo], title: string) -> bool {
 fn find_by_id(xs: [model.Todo], id: string) -> Option<model.Todo> {
     var r: Option<model.Todo> = Option.None;
     for t in xs {
-        if (t.id == id) { r = Option.Some(t); }
+        if (t.id == id) {
+            r = Option.Some(t);
+        }
     }
     r
 }
@@ -135,11 +139,11 @@ fn apply_add_toggle_delete_clear() {
 @test
 fn apply_ignores_blank_title_and_unknown_cmd() {
     let s = fresh("/tmp/raydesk_test_apply2.kv");
-    store.apply(s, "{\"cmd\":\"add\",\"title\":\"   \"}");   // blank -> ignored
+    store.apply(s, "{\"cmd\":\"add\",\"title\":\"   \"}");  // blank -> ignored
     assert_eq(store.list(s).len(), 0);
-    store.apply(s, "{\"cmd\":\"nope\"}");                     // unknown -> no-op
+    store.apply(s, "{\"cmd\":\"nope\"}");  // unknown -> no-op
     assert_eq(store.list(s).len(), 0);
-    store.apply(s, "garbage");                                 // not JSON -> no-op
+    store.apply(s, "garbage");  // not JSON -> no-op
     assert_eq(store.list(s).len(), 0);
     let _rm = fs.remove_file("/tmp/raydesk_test_apply2.kv");
 }

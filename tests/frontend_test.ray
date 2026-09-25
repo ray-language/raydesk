@@ -1,0 +1,75 @@
+// The local frontend server is locked to the window that knows the token
+// (web.listen_local). One @test on purpose: OS listeners outlive a test's fibers.
+
+import frontend;
+import std/net;
+
+// Sends one raw HTTP/1.1 GET and returns the whole response text ("" on I/O error).
+fn http_get(port: int, target: string, headers: string) -> string {
+    let conn = match (net.tcp_connect("127.0.0.1", port)) {
+        Result.Ok(c) => c,
+        Result.Err(e) => panic("connect: ${e}"),
+    };
+    let req = "GET ${target} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\n${headers}Connection: close\r\n\r\n";
+    match (net.socket_write(conn, req)) {
+        Result.Ok(_) => { },
+        Result.Err(e) => panic("write: ${e}"),
+    }
+    var out = "";
+    while (true) {
+        match (net.socket_read(conn)) {
+            Result.Ok(chunk) => {
+                if (chunk == "") {
+                    break;
+                }
+                out = out + chunk;
+            },
+            Result.Err(_) => {
+                break;
+            },
+        }
+    }
+    close(conn);
+    out
+}
+
+fn port_of(url: string) -> int {
+    // "http://127.0.0.1:<port>/?ray_token=…"
+    let rest = url.substring("http://127.0.0.1:".len(), url.len());
+    match (rest.index_of("/")) {
+        Option.Some(i) => match (parse_int(rest.substring(0, i))) {
+            Option.Some(p) => p,
+            Option.None => panic("bad port in ${url}"),
+        },
+        Option.None => panic("bad url ${url}"),
+    }
+}
+
+@test
+fn frontend_is_locked_to_the_token() {
+    let token = frontend.new_token();
+    assert_eq(token.len(), 32);
+    let url = match (frontend.start(token)) {
+        Result.Ok(u) => u,
+        Result.Err(e) => panic("start: ${e}"),
+    };
+    assert(url.ends_with("/?ray_token=" + token));
+    let port = port_of(url);
+
+    // Without the token: 403, even for a static asset.
+    assert(http_get(port, "/", "").starts_with("HTTP/1.1 403"));
+    assert(http_get(port, "/app.js", "").starts_with("HTTP/1.1 403"));
+    // A wrong token is refused too.
+    assert(http_get(port, "/?ray_token=deadbeef", "").starts_with("HTTP/1.1 403"));
+
+    // The window's first load carries the token in the URL: 200 + the session cookie.
+    let first = http_get(port, "/?ray_token=" + token, "");
+    assert(first.starts_with("HTTP/1.1 200"));
+    assert(first.contains("ray_local=" + token));
+    // Its sub-resources come back with the cookie.
+    assert(http_get(port, "/app.js", "Cookie: ray_local=${token}\r\n").starts_with("HTTP/1.1 200"));
+
+    // A web page in the user's browser (cross-site Origin) is refused even with the token.
+    let cross = http_get(port, "/?ray_token=" + token, "Origin: https://evil.example\r\n");
+    assert(cross.starts_with("HTTP/1.1 403"));
+}

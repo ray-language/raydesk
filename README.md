@@ -1,7 +1,7 @@
 # RayDesk
 
 Un gestor de tareas de **escritorio, iOS y Android** escrito en
-[raylang](https://raylang.dev) (probado con **1.4.0**). Ventana/webview del
+[raylang](https://raylang.dev) (probado con **1.27.11**). Ventana/webview del
 sistema + puente IPC de `std/ui` + persistencia con `std/kv`. El **mismo programa
 raylang** (`src/`) corre en macOS, Linux, iOS y Android. Pensado como banco de
 pruebas de las características del lenguaje.
@@ -32,8 +32,15 @@ pruebas de las características del lenguaje.
   las actualizaciones iniciadas por menús.)
 - **Assets**: **`web.static_embedded(app, "/", "assets")`** sirve la página
   (bundle-safe, con ETag/304/Range); el servidor `web` corre en otra fibra
-  (`spawn` + `web.listen_on`) y **solo** sirve estáticos. El puerto se obtiene sin
-  carrera con `net.tcp_listen(…, 0)` + `net.local_port`.
+  (`spawn` + `web.listen_local`, en `src/frontend.ray`) y **solo** sirve estáticos.
+  El puerto se obtiene sin carrera con `net.tcp_listen(…, 0)` + `net.local_port`.
+- **Servidor cerrado a la ventana**: cada arranque genera un token de 128 bits
+  (`webserver.local_token()`) y la ventana abre `http://127.0.0.1:<puerto>/?ray_token=<token>`;
+  la primera petición siembra la cookie `ray_local` (`HttpOnly; SameSite=Strict`) para
+  el resto de assets. Cualquier otro proceso de la máquina (u otra app del móvil) sin el
+  token, y cualquier página web del navegador (guarda de `Origin`), recibe **403**. En
+  escritorio bastaría `ray://app` + `ui.mount_embed` (sin puerto), pero los shells
+  iOS/Android cargan la UI desde este mismo servidor local.
 - **Look**: UI moderna con **Tailwind CSS** (build purgado: `assets/app.css` solo
   contiene las clases realmente usadas en `index.html`/`app.js`, ~12 KB
   minificado). Botones azules con estados hover/active/focus-ring, tarjetas
@@ -47,7 +54,7 @@ pruebas de las características del lenguaje.
   tareas… ⌘E, Recargar ⌘R) y "Tarea" (Limpiar completadas ⌘K) con `ui.menu`. El
   click llega como evento `"menu"` con `tag`; las acciones manejan el frontend vía
   `ui.eval_js` (reusan los handlers de la página, así la UI queda sincronizada),
-  "Exportar" abre el diálogo nativo `ui.save_file`, y "Acerca de RayDesk"
+  "Exportar" abre el diálogo nativo `ui.save_file_with` (nombre sugerido y filtro JSON), y "Acerca de RayDesk"
   (`tag: "role:about"`) abre el **panel About nativo** de macOS relleno con
   `ui.set_about` (nombre, versión, descripción, ©); en Linux cae en un modal
   informativo en la webview. Los menús estándar App/Edit (⌘Q, portapapeles, undo)
@@ -68,10 +75,12 @@ pruebas de las características del lenguaje.
 src/
 ├── model.ray   # Todo + JSON (una tarea <-> objeto; lista para la API)
 ├── store.ray   # repositorio std/kv (list/add/toggle/remove/clear_done) + apply(cmd)
-└── main.ray    # web static + IPC (window.ray → std/kv) + std/ui event loop
+├── frontend.ray # servidor local de estáticos cerrado con token (web.listen_local)
+└── main.ray    # IPC (window.ray → std/kv) + std/ui event loop
 tests/
-├── model_test.ray  # (de)serialización y field_of
-└── store_test.ray  # CRUD del store + dispatch de comandos (store.apply)
+├── model_test.ray    # (de)serialización y field_of
+├── store_test.ray    # CRUD del store + dispatch de comandos (store.apply), en dirs temporales
+└── frontend_test.ray # el servidor responde 403 sin token o con Origin ajeno, 200 con él
 assets/
 ├── index.html  # utilidades Tailwind
 ├── app.js      # frontend: IPC (window.ray.request/send + rayRender) + Tailwind
@@ -95,10 +104,10 @@ raydesk-android/        # shell Android (Gradle) generado por `ray bundle --andr
 ## Ejecutar
 
 ```sh
-ray add web@^0.2.0      # (ya en ray.toml) descarga web + net del registro
+ray fetch               # descarga web ^0.4.4 + net ^0.3.5 del registro (ya en ray.toml)
 ray run                 # abre la ventana (dev: assets en vivo desde disco)
 ray dev                 # igual, con recarga al guardar cambios
-ray test                # corre los @test de tests/ (13: model + store)
+ray test                # corre los @test de tests/ (14: model + store + frontend)
 ray build --native --release
 ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .desktop
 ```
@@ -114,8 +123,8 @@ ray bundle --name RayDesk --id org.rayala.raydesk   # empaqueta la .app / .deskt
 
 El **mismo `src/`** corre en iOS: `ray bundle --ios` compila el programa raylang a
 un **staticlib** y genera un shell Xcode en `raydesk-ios/`. Dentro de la app, el
-programa arranca su webserver embebido en `127.0.0.1` y `ui.open(title, url)` carga
-esa URL en un `WKWebView` — el mismo frontend (`assets/`) y la misma API que en
+programa arranca su webserver embebido en `127.0.0.1` (cerrado con el token local) y
+`ui.open(title, url)` carga esa URL en un `WKWebView` — el mismo frontend (`assets/`) y la misma API que en
 escritorio. Los eventos de ciclo de vida llegan por `ui.next_event()` como
 `kind="lifecycle"`, `tag="background"`/`"foreground"`.
 
@@ -180,9 +189,10 @@ adb logcat -s ray                       # stdout/stderr del programa
 
 ## Características de raylang ejercitadas
 
-paquete `web` 0.2.0 (Tier-2: `listen_on`, `static_embedded`) · `std/ui`
+paquetes `web` 0.4 (Tier-2: `listen_local`, `static_embedded`) y `net` 0.3
+(`webserver.local_token`) · `std/ui`
 (ventana, **puente IPC** `window.ray.request`/`send` + `as_request`/`reply`,
-`eval_js`, `app_menu`, `set_about`, `menu`, `save_file`, eventos) · `std/net` ·
+`eval_js`, `app_menu`, `set_about`, `menu`/`item`, `save_file_with`, eventos) · `std/net` ·
 `std/kv` (store con guardado atómico) · `std/fs` (`mkdir`, export) ·
 `std/json` · `std/uuid` (`uuid_v7`) · `std/time` · módulos + `pub` ·
 concurrencia (`spawn`) · `struct`/`enum` (uso cross-módulo) · pattern matching ·

@@ -1,0 +1,30 @@
+// The local HTTP server that feeds the window its frontend (assets/). It only serves
+// the embedded static files: all data flows over the std/ui IPC bridge, so there are
+// no API routes. `start` locks it to ONE window with web.listen_local.
+
+import web/framework as web;
+import net/webserver;
+import std/net;
+
+/// The web app: the embedded frontend at `/`.
+pub fn build() -> web.App {
+    let app = web.new_app();
+    web.static_embedded(app, "/", "assets");
+    app
+}
+
+/// Binds an ephemeral loopback port, serves the frontend on it (in its own fiber)
+/// locked to `token`, and returns the URL the window must open.
+pub fn start(token: string) -> Result<string, string> {
+    let listener = net.tcp_listen("127.0.0.1", 0)?;
+    let port = net.local_port(listener);
+    let _server = spawn(fn() {
+        let _r = web.listen_local(build, listener, token);
+    });
+    Result.Ok("http://127.0.0.1:${port}/?ray_token=${token}")
+}
+
+/// A fresh per-launch token for `start`.
+pub fn new_token() -> string {
+    webserver.local_token()
+}

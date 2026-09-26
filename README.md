@@ -104,7 +104,7 @@ raydesk-android/        # shell Android (Gradle) generado por `ray bundle --andr
 ## Ejecutar
 
 ```sh
-ray fetch               # descarga web ^0.4.4 + net ^0.3.5 del registro (ya en ray.toml)
+ray fetch               # descarga web ^0.4.5 + net ^0.3.7 del registro (ya en ray.toml)
 ray run                 # abre la ventana (dev: assets en vivo desde disco)
 ray dev                 # igual, con recarga al guardar cambios
 ray test                # corre los @test de tests/ (14: model + store + frontend)

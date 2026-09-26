@@ -1,6 +1,7 @@
 [package]
 name = "raydesk"
 version = "0.2.0"
+raylang = "1.27.14"
 
 [native]
 # Bake the frontend into the native binary / .app so it runs from any cwd
@@ -9,5 +10,5 @@ version = "0.2.0"
 embed = ["assets"]
 
 [dependencies]
-web = "^0.4.4"
-net = "^0.3.5"
+web = "^0.4.5"
+net = "^0.3.7"

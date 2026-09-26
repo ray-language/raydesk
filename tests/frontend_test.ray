@@ -5,7 +5,7 @@ import frontend;
 import std/net;
 
 // Sends one raw HTTP/1.1 GET and returns the whole response text ("" on I/O error).
-fn http_get(port: int, target: string, headers: string) -> string {
+fn get(port: int, target: string, headers: string) -> string {
     let conn = match (net.tcp_connect("127.0.0.1", port)) {
         Result.Ok(c) => c,
         Result.Err(e) => panic("connect: ${e}"),
@@ -24,9 +24,7 @@ fn http_get(port: int, target: string, headers: string) -> string {
                 }
                 out = out + chunk;
             },
-            Result.Err(_) => {
-                break;
-            },
+            Result.Err(_) => break,
         }
     }
     close(conn);
@@ -57,19 +55,19 @@ fn frontend_is_locked_to_the_token() {
     let port = port_of(url);
 
     // Without the token: 403, even for a static asset.
-    assert(http_get(port, "/", "").starts_with("HTTP/1.1 403"));
-    assert(http_get(port, "/app.js", "").starts_with("HTTP/1.1 403"));
+    assert(get(port, "/", "").starts_with("HTTP/1.1 403"));
+    assert(get(port, "/app.js", "").starts_with("HTTP/1.1 403"));
     // A wrong token is refused too.
-    assert(http_get(port, "/?ray_token=deadbeef", "").starts_with("HTTP/1.1 403"));
+    assert(get(port, "/?ray_token=deadbeef", "").starts_with("HTTP/1.1 403"));
 
     // The window's first load carries the token in the URL: 200 + the session cookie.
-    let first = http_get(port, "/?ray_token=" + token, "");
+    let first = get(port, "/?ray_token=" + token, "");
     assert(first.starts_with("HTTP/1.1 200"));
     assert(first.contains("ray_local=" + token));
     // Its sub-resources come back with the cookie.
-    assert(http_get(port, "/app.js", "Cookie: ray_local=${token}\r\n").starts_with("HTTP/1.1 200"));
+    assert(get(port, "/app.js", "Cookie: ray_local=${token}\r\n").starts_with("HTTP/1.1 200"));
 
     // A web page in the user's browser (cross-site Origin) is refused even with the token.
-    let cross = http_get(port, "/?ray_token=" + token, "Origin: https://evil.example\r\n");
+    let cross = get(port, "/?ray_token=" + token, "Origin: https://evil.example\r\n");
     assert(cross.starts_with("HTTP/1.1 403"));
 }

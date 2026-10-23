@@ -11,4 +11,4 @@ embed = ["assets"]
 
 [dependencies]
 web = "^0.4.5"
-net = "^0.3.7"
+net = "^0.11.4"
